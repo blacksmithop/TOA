@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
@@ -18,6 +18,7 @@ interface Crime {
     items: Array<{ id: number; quantity: number }>
     respect: number
   }
+  executed_at: number
 }
 
 export default function Dashboard() {
@@ -29,6 +30,24 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [isFetchingHistorical, setIsFetchingHistorical] = useState(false)
+  const [historicalProgress, setHistoricalProgress] = useState({ current: 0, total: 0 })
+  const [historicalCrimes, setHistoricalCrimes] = useState<Crime[]>([])
+  const [historicalFetchComplete, setHistoricalFetchComplete] = useState(false)
+
+  const allCrimes = useMemo(() => {
+    const crimeMap = new Map<number, Crime>()
+
+    historicalCrimes.forEach((crime) => {
+      crimeMap.set(crime.id, crime)
+    })
+
+    crimes.forEach((crime) => {
+      crimeMap.set(crime.id, crime)
+    })
+
+    return Array.from(crimeMap.values())
+  }, [crimes, historicalCrimes])
 
   useEffect(() => {
     const apiKey = localStorage.getItem("factionApiKey")
@@ -37,7 +56,21 @@ export default function Dashboard() {
       return
     }
 
+    const cached = localStorage.getItem("factionHistoricalCrimes")
+    if (cached) {
+      try {
+        const parsedCrimes = JSON.parse(cached)
+        setHistoricalCrimes(parsedCrimes)
+        setHistoricalFetchComplete(true)
+      } catch (err) {
+        console.error("[v0] Error loading cached crimes:", err)
+      }
+    }
+
     fetchData(apiKey)
+    setTimeout(() => {
+      fetchHistoricalCrimes(apiKey)
+    }, 1000)
   }, [router])
 
   const handleApiError = async (response: Response, endpoint: string) => {
@@ -134,6 +167,121 @@ export default function Dashboard() {
     }
   }
 
+  const fetchHistoricalCrimes = async (apiKey: string) => {
+    const cached = localStorage.getItem("factionHistoricalCrimes")
+    const lastFetch = localStorage.getItem("lastHistoricalFetch")
+
+    if (cached && lastFetch) {
+      const timeSinceLastFetch = Date.now() - Number.parseInt(lastFetch)
+      if (timeSinceLastFetch < 3600000) {
+        console.log("[v0] Using cached historical crimes")
+        setHistoricalFetchComplete(true)
+        return
+      }
+    }
+
+    setIsFetchingHistorical(true)
+    const allCrimes: Crime[] = []
+    let hasMoreData = true
+    let oldestTimestamp: number | null = null
+    let lastOldestCrimeId: number | null = null
+    let requestCount = 0
+    const REQUEST_DELAY = 2500
+
+    try {
+      const firstResponse = await fetch(
+        `https://api.torn.com/v2/faction/crimes?cat=completed&sort=DESC&striptags=true`,
+        {
+          headers: {
+            Authorization: `ApiKey ${apiKey}`,
+            accept: "application/json",
+          },
+        },
+      )
+
+      if (!firstResponse.ok) {
+        throw new Error("Failed to fetch crimes data")
+      }
+
+      const firstData = await firstResponse.json()
+
+      if (firstData.crimes) {
+        const crimesArray = Object.values(firstData.crimes)
+        allCrimes.push(...crimesArray)
+        setHistoricalCrimes([...allCrimes])
+
+        if (crimesArray.length > 0) {
+          const oldestCrime = crimesArray.reduce((oldest: Crime, crime: Crime) =>
+            crime.executed_at < oldest.executed_at ? crime : oldest,
+          )
+          oldestTimestamp = oldestCrime.executed_at
+          lastOldestCrimeId = oldestCrime.id
+        } else {
+          hasMoreData = false
+        }
+      } else {
+        hasMoreData = false
+      }
+
+      setHistoricalProgress({ current: allCrimes.length, total: allCrimes.length })
+
+      while (hasMoreData && oldestTimestamp && requestCount < 100) {
+        await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY))
+        requestCount++
+
+        const response = await fetch(
+          `https://api.torn.com/v2/faction/crimes?cat=completed&sort=DESC&to=${oldestTimestamp}&striptags=true`,
+          {
+            headers: {
+              Authorization: `ApiKey ${apiKey}`,
+              accept: "application/json",
+            },
+          },
+        )
+
+        if (!response.ok) {
+          console.error(`Failed to fetch crimes batch ${requestCount}`)
+          break
+        }
+
+        const data = await response.json()
+
+        if (data.crimes && Object.keys(data.crimes).length > 0) {
+          const crimesArray = Object.values(data.crimes)
+
+          const newOldestCrime = crimesArray.reduce((oldest: Crime, crime: Crime) =>
+            crime.executed_at < oldest.executed_at ? crime : oldest,
+          )
+
+          if (newOldestCrime.id === lastOldestCrimeId) {
+            hasMoreData = false
+            break
+          }
+
+          allCrimes.push(...crimesArray)
+          setHistoricalCrimes([...allCrimes])
+          oldestTimestamp = newOldestCrime.executed_at
+          lastOldestCrimeId = newOldestCrime.id
+
+          setHistoricalProgress({ current: allCrimes.length, total: allCrimes.length })
+        } else {
+          hasMoreData = false
+        }
+      }
+
+      if (allCrimes.length > 0) {
+        localStorage.setItem("factionHistoricalCrimes", JSON.stringify(allCrimes))
+        localStorage.setItem("lastHistoricalFetch", Date.now().toString())
+        console.log(`[v0] Fetched ${allCrimes.length} historical crimes`)
+      }
+    } catch (err) {
+      console.error("[v0] Error fetching historical crimes:", err)
+    } finally {
+      setIsFetchingHistorical(false)
+      setHistoricalFetchComplete(true)
+    }
+  }
+
   const handleLogout = () => {
     localStorage.removeItem("factionApiKey")
     toast({
@@ -175,6 +323,12 @@ export default function Dashboard() {
               <h1 className="text-3xl font-bold text-foreground">Faction Crimes</h1>
             </button>
             <p className="text-muted-foreground mt-1">View and manage faction operations</p>
+            {isFetchingHistorical && (
+              <p className="text-xs text-cyan-400 mt-1 flex items-center gap-2">
+                <RefreshCw size={12} className="animate-spin" />
+                Fetching historical data... {historicalProgress.current.toLocaleString()} crimes loaded
+              </p>
+            )}
           </div>
           <div className="relative">
             <button
@@ -228,15 +382,24 @@ export default function Dashboard() {
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-5xl mx-auto space-y-6">
-          {/* Summary Section */}
-          {crimes.length > 0 && <CrimeSummary crimes={crimes} items={items} />}
+          {allCrimes.length > 0 && <CrimeSummary crimes={allCrimes} items={items} />}
 
-          {/* Navigation Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Members Card */}
             <Link
               href="/dashboard/members"
-              className="bg-card border border-border rounded-lg p-4 hover:border-primary transition-all text-left group cursor-pointer block"
+              className={`bg-card border border-border rounded-lg p-4 hover:border-primary transition-all text-left group block ${
+                !historicalFetchComplete ? "pointer-events-none opacity-50" : "cursor-pointer"
+              }`}
+              onClick={(e) => {
+                if (!historicalFetchComplete) {
+                  e.preventDefault()
+                  toast({
+                    title: "Please wait",
+                    description: "Historical data is still loading...",
+                    variant: "destructive",
+                  })
+                }
+              }}
             >
               <div className="flex items-center gap-3 mb-2">
                 <div className="bg-primary/20 p-2 rounded-lg border border-primary/40">
@@ -253,10 +416,21 @@ export default function Dashboard() {
               <p className="text-xs text-muted-foreground">Total members with participation stats</p>
             </Link>
 
-            {/* Organized Crimes Card */}
             <Link
               href="/dashboard/crimes"
-              className="bg-card border border-border rounded-lg p-4 hover:border-accent transition-all text-left group cursor-pointer block"
+              className={`bg-card border border-border rounded-lg p-4 hover:border-accent transition-all text-left group block ${
+                !historicalFetchComplete ? "pointer-events-none opacity-50" : "cursor-pointer"
+              }`}
+              onClick={(e) => {
+                if (!historicalFetchComplete) {
+                  e.preventDefault()
+                  toast({
+                    title: "Please wait",
+                    description: "Historical data is still loading...",
+                    variant: "destructive",
+                  })
+                }
+              }}
             >
               <div className="flex items-center gap-3 mb-2">
                 <div className="bg-accent/20 p-2 rounded-lg border border-accent/40">
@@ -269,14 +443,25 @@ export default function Dashboard() {
                   <p className="text-xs text-muted-foreground">Manage operations</p>
                 </div>
               </div>
-              <div className="text-3xl font-bold text-accent mb-1">{crimes.length}</div>
+              <div className="text-3xl font-bold text-accent mb-1">{allCrimes.length}</div>
               <p className="text-xs text-muted-foreground">Active and completed crimes</p>
             </Link>
 
-            {/* Armory Card */}
             <Link
               href="/dashboard/armory"
-              className="bg-card border border-border rounded-lg p-4 hover:border-orange-500 transition-all text-left group cursor-pointer block"
+              className={`bg-card border border-border rounded-lg p-4 hover:border-orange-500 transition-all text-left group block ${
+                !historicalFetchComplete ? "pointer-events-none opacity-50" : "cursor-pointer"
+              }`}
+              onClick={(e) => {
+                if (!historicalFetchComplete) {
+                  e.preventDefault()
+                  toast({
+                    title: "Please wait",
+                    description: "Historical data is still loading...",
+                    variant: "destructive",
+                  })
+                }
+              }}
             >
               <div className="flex items-center gap-3 mb-2">
                 <div className="bg-orange-500/20 p-2 rounded-lg border border-orange-500/40">
@@ -295,10 +480,21 @@ export default function Dashboard() {
               <p className="text-xs text-muted-foreground">Historical armory activity</p>
             </Link>
 
-            {/* Reports Card */}
             <Link
               href="/dashboard/reports"
-              className="bg-card border border-border rounded-lg p-4 hover:border-cyan-500 transition-all text-left group cursor-pointer block"
+              className={`bg-card border border-border rounded-lg p-4 hover:border-cyan-500 transition-all text-left group block ${
+                !historicalFetchComplete ? "pointer-events-none opacity-50" : "cursor-pointer"
+              }`}
+              onClick={(e) => {
+                if (!historicalFetchComplete) {
+                  e.preventDefault()
+                  toast({
+                    title: "Please wait",
+                    description: "Historical data is still loading...",
+                    variant: "destructive",
+                  })
+                }
+              }}
             >
               <div className="flex items-center gap-3 mb-2">
                 <div className="bg-cyan-500/20 p-2 rounded-lg border border-cyan-500/40">
@@ -308,18 +504,17 @@ export default function Dashboard() {
                   <h2 className="text-lg font-bold text-foreground group-hover:text-cyan-500 transition-colors">
                     Reports
                   </h2>
-                  <p className="text-xs text-muted-foreground">Historical data</p>
+                  <p className="text-xs text-muted-foreground">Detailed crime reports</p>
                 </div>
               </div>
               <div className="text-3xl font-bold text-cyan-500 mb-1">
                 <FileText size={32} />
               </div>
-              <p className="text-xs text-muted-foreground">Detailed crime reports</p>
+              <p className="text-xs text-muted-foreground">Historical data</p>
             </Link>
           </div>
 
-          {/* Success Rate Charts */}
-          {crimes.length > 0 && <CrimeSuccessCharts crimes={crimes} />}
+          {allCrimes.length > 0 && <CrimeSuccessCharts crimes={allCrimes} />}
         </div>
       </main>
 

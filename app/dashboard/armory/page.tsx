@@ -15,6 +15,7 @@ import {
   ChevronUp,
   Settings,
   X,
+  ArrowLeft,
 } from "lucide-react"
 import { fetchAndCacheItems } from "@/lib/items-cache"
 import type { TornItem } from "@/lib/items-cache"
@@ -599,11 +600,20 @@ export default function ArmoryPage() {
     <div className="flex flex-col h-screen bg-background overflow-hidden">
       <header className="flex-shrink-0 border-b border-border bg-card p-6">
         <div className="flex items-center justify-between gap-4">
-          <div>
-            <button onClick={() => router.push("/dashboard")} className="hover:opacity-80 transition-opacity">
-              <h1 className="text-3xl font-bold text-foreground">Armory Backfill</h1>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="p-2 hover:bg-accent rounded-lg transition-colors border border-border"
+              title="Back to Dashboard"
+            >
+              <ArrowLeft size={20} />
             </button>
-            <p className="text-muted-foreground mt-1">Historical faction armory logs</p>
+            <div>
+              <button onClick={() => router.push("/dashboard")} className="hover:opacity-80 transition-opacity">
+                <h1 className="text-3xl font-bold text-foreground">Armory Backfill</h1>
+              </button>
+              <p className="text-muted-foreground mt-1">Historical faction armory logs</p>
+            </div>
           </div>
           <div className="relative">
             <button

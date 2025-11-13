@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { RefreshCw, LogOut, MoreVertical, ArrowLeft, Info } from "lucide-react"
+import { RefreshCw, LogOut, MoreVertical, ArrowLeft, Info, RotateCcw } from "lucide-react"
 import CrimesList from "@/components/crimes-list"
 import CrimeSummary from "@/components/crime-summary"
 import { fetchAndCacheItems } from "@/lib/items-cache"
@@ -64,6 +64,9 @@ export default function CrimesPage() {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [filteredMemberId, setFilteredMemberId] = useState<number | null>(null)
   const [minPassRate, setMinPassRate] = useState(65)
+  const [historicalCrimes, setHistoricalCrimes] = useState<Crime[]>([])
+  const [showReloadModal, setShowReloadModal] = useState(false)
+  const historicalCrimesLengthRef = useRef(0)
 
   useEffect(() => {
     const apiKey = localStorage.getItem("factionApiKey")
@@ -74,7 +77,39 @@ export default function CrimesPage() {
 
     console.log("[v0] Initial data fetch triggered")
     fetchData(apiKey)
-  }, [router]) // Only depends on router, not searchParams
+
+    loadHistoricalCrimes()
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "factionHistoricalCrimes") {
+        console.log("[v0] Historical crimes updated from another tab/component")
+        loadHistoricalCrimes()
+      }
+    }
+
+    window.addEventListener("storage", handleStorageChange)
+
+    const pollInterval = setInterval(() => {
+      const cached = localStorage.getItem("factionHistoricalCrimes")
+      if (cached) {
+        try {
+          const data = JSON.parse(cached)
+          if (data.length !== historicalCrimesLengthRef.current) {
+            console.log("[v0] Historical crimes count changed, reloading")
+            historicalCrimesLengthRef.current = data.length
+            loadHistoricalCrimes()
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+    }, 3000)
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange)
+      clearInterval(pollInterval)
+    }
+  }, [router])
 
   useEffect(() => {
     const memberParam = searchParams.get("member")
@@ -84,7 +119,7 @@ export default function CrimesPage() {
     } else {
       setFilteredMemberId(null)
     }
-  }, [searchParams]) // Separate effect for searchParams
+  }, [searchParams])
 
   const handleApiError = async (response: Response, endpoint: string) => {
     try {
@@ -138,12 +173,24 @@ export default function CrimesPage() {
         throw new Error(crimesData.error.error || "Failed to fetch crimes")
       }
 
-      setCrimes(Object.values(crimesData.crimes || {}))
+      const currentCrimes = Object.values(crimesData.crimes || {})
+      const crimeMap = new Map<number, Crime>()
+
+      historicalCrimes.forEach((crime) => {
+        crimeMap.set(crime.id, crime)
+      })
+
+      currentCrimes.forEach((crime) => {
+        crimeMap.set(crime.id, crime)
+      })
+
+      const allCrimes = Array.from(crimeMap.values())
+      setCrimes(allCrimes)
 
       if (!refreshing) {
         toast({
           title: "Success",
-          description: "Crimes data loaded successfully",
+          description: `Crimes data loaded successfully (${allCrimes.length} total including historical)`,
         })
       }
     } catch (err) {
@@ -178,6 +225,36 @@ export default function CrimesPage() {
         title: "Success",
         description: "Data refreshed successfully",
       })
+    }
+  }
+
+  const handleReloadAll = async () => {
+    const apiKey = localStorage.getItem("factionApiKey")
+    if (!apiKey) return
+
+    setShowReloadModal(false)
+    setIsLoading(true)
+
+    try {
+      localStorage.removeItem("factionHistoricalCrimes")
+      localStorage.removeItem("lastHistoricalFetch")
+      localStorage.removeItem("factionMembers")
+      localStorage.removeItem("tornItems")
+
+      await fetchData(apiKey)
+
+      toast({
+        title: "Success",
+        description: "All data reloaded successfully",
+      })
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to reload data",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -220,6 +297,20 @@ export default function CrimesPage() {
     }
   }
 
+  const loadHistoricalCrimes = () => {
+    const cached = localStorage.getItem("factionHistoricalCrimes")
+    if (cached) {
+      try {
+        const data = JSON.parse(cached)
+        setHistoricalCrimes(data)
+        historicalCrimesLengthRef.current = data.length
+        console.log(`[v0] Loaded ${data.length} historical crimes`)
+      } catch (e) {
+        console.error("[v0] Failed to parse historical crimes:", e)
+      }
+    }
+  }
+
   const filteredCrimes = filteredMemberId
     ? crimes.filter((crime) => crime.slots.some((slot) => slot.user?.id === filteredMemberId))
     : crimes
@@ -234,6 +325,32 @@ export default function CrimesPage() {
 
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
+      {showReloadModal && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setShowReloadModal(false)} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card border border-border rounded-lg p-6 z-50 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-3">Reload All Data?</h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              This will clear all cached data and fetch fresh information from the API. This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowReloadModal(false)}
+                className="px-4 py-2 border border-border rounded-lg hover:bg-accent transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReloadAll}
+                className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 transition-colors"
+              >
+                Reload All
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       <header className="flex-shrink-0 border-b border-border bg-card p-6">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -283,6 +400,16 @@ export default function CrimesPage() {
                   >
                     <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
                     {refreshing ? "Refreshing..." : "Refresh"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowReloadModal(true)
+                      setDropdownOpen(false)
+                    }}
+                    className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-accent transition-colors border-t border-border"
+                  >
+                    <RotateCcw size={18} />
+                    Reload All
                   </button>
                   <button
                     onClick={() => {

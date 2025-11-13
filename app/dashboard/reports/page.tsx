@@ -3,7 +3,18 @@
 import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { RefreshCw, LogOut, MoreVertical, Info, Play, Loader2, ChevronDown } from "lucide-react"
+import {
+  RefreshCw,
+  LogOut,
+  MoreVertical,
+  Info,
+  Play,
+  Loader2,
+  ChevronDown,
+  ArrowLeft,
+  ArrowUp,
+  ArrowDown,
+} from "lucide-react"
 import { fetchAndCacheItems } from "@/lib/items-cache"
 import type { TornItem } from "@/lib/items-cache"
 import { VictoryPie } from "victory"
@@ -19,6 +30,7 @@ interface Crime {
     items: Array<{ id: number; quantity: number }>
     respect: number
   }
+  difficulty?: number
   [key: string]: any
 }
 
@@ -38,9 +50,29 @@ export default function ReportsPage() {
   const [items, setItems] = useState<Map<number, TornItem>>(new Map())
   const [selectedItem, setSelectedItem] = useState<any>(null)
   const [expandedCrimes, setExpandedCrimes] = useState<Set<string>>(new Set())
+  const [historicalCrimes, setHistoricalCrimes] = useState<Crime[]>([])
+  const [currentCrimes, setCurrentCrimes] = useState<Crime[]>([])
+  const [statusFilter, setStatusFilter] = useState<string>("All")
+  const [difficultyFilter, setDifficultyFilter] = useState<string>("All")
+  const [sortBy, setSortBy] = useState<string>("Total")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
 
   const WEEK_IN_SECONDS = 7 * 24 * 60 * 60
   const REQUEST_DELAY = 2000
+
+  const allCrimes = useMemo(() => {
+    const crimeMap = new Map<number, Crime>()
+
+    historicalCrimes.forEach((crime) => {
+      crimeMap.set(crime.id, crime)
+    })
+
+    currentCrimes.forEach((crime) => {
+      crimeMap.set(crime.id, crime)
+    })
+
+    return Array.from(crimeMap.values())
+  }, [historicalCrimes, currentCrimes])
 
   useEffect(() => {
     const apiKey = localStorage.getItem("factionApiKey")
@@ -49,23 +81,80 @@ export default function ReportsPage() {
       return
     }
 
-    // Load cached crimes
-    const cached = localStorage.getItem("factionCrimesReport")
-    if (cached) {
+    const loadData = async () => {
       try {
-        const data = JSON.parse(cached)
-        setCrimes(data)
-        setTotalCrimes(data.length || 0)
+        const crimesRes = await fetch("https://api.torn.com/v2/faction/crimes?striptags=true", {
+          headers: { Authorization: `ApiKey ${apiKey}`, accept: "application/json" },
+        })
+
+        if (crimesRes.ok) {
+          const crimesData = await crimesRes.json()
+          if (crimesData.crimes) {
+            setCurrentCrimes(Object.values(crimesData.crimes))
+          }
+        }
       } catch (e) {
-        console.error("Failed to parse cached crimes:", e)
+        console.error("Failed to fetch current crimes:", e)
+      }
+
+      const cached = localStorage.getItem("factionHistoricalCrimes")
+      if (cached) {
+        try {
+          const data = JSON.parse(cached)
+          setHistoricalCrimes(data)
+          console.log(`[v0] Loaded ${data.length} historical crimes from cache`)
+        } catch (e) {
+          console.error("Failed to parse cached crimes:", e)
+        }
       }
     }
 
-    // Fetch items data
+    loadData()
+
     fetchAndCacheItems(apiKey).then((itemsData) => {
       setItems(itemsData)
     })
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "factionHistoricalCrimes") {
+        const cached = localStorage.getItem("factionHistoricalCrimes")
+        if (cached) {
+          try {
+            const data = JSON.parse(cached)
+            setHistoricalCrimes(data)
+          } catch (e) {
+            console.error("Failed to parse updated historical crimes:", e)
+          }
+        }
+      }
+    }
+
+    window.addEventListener("storage", handleStorageChange)
+
+    const pollInterval = setInterval(() => {
+      const cached = localStorage.getItem("factionHistoricalCrimes")
+      if (cached) {
+        try {
+          const data = JSON.parse(cached)
+          if (data.length !== historicalCrimes.length) {
+            setHistoricalCrimes(data)
+          }
+        } catch (e) {
+          // Ignore
+        }
+      }
+    }, 3000)
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange)
+      clearInterval(pollInterval)
+    }
   }, [router])
+
+  useEffect(() => {
+    setCrimes(allCrimes)
+    setTotalCrimes(allCrimes.length)
+  }, [allCrimes])
 
   const summary = useMemo(() => {
     let totalMoney = 0
@@ -127,30 +216,89 @@ export default function ReportsPage() {
   }, [crimes, items])
 
   const crimeStats = useMemo(() => {
-    const stats = new Map<string, { successful: number; failed: number }>()
+    const stats = new Map<
+      string,
+      {
+        successful: number
+        failed: number
+        planning: number
+        recruiting: number
+        expired: number
+        difficulty: number
+      }
+    >()
 
     crimes.forEach((crime) => {
-      if (crime.status === "Successful") {
-        const existing = stats.get(crime.name) || { successful: 0, failed: 0 }
-        existing.successful++
-        stats.set(crime.name, existing)
-      } else if (crime.status === "Failure" || crime.status === "Failed") {
-        const existing = stats.get(crime.name) || { successful: 0, failed: 0 }
-        existing.failed++
-        stats.set(crime.name, existing)
+      const existing = stats.get(crime.name) || {
+        successful: 0,
+        failed: 0,
+        planning: 0,
+        recruiting: 0,
+        expired: 0,
+        difficulty: crime.difficulty || 0,
       }
+
+      if (crime.status === "Successful") {
+        existing.successful++
+      } else if (crime.status === "Failure" || crime.status === "Failed") {
+        existing.failed++
+      } else if (crime.status === "Planning") {
+        existing.planning++
+      } else if (crime.status === "Recruiting") {
+        existing.recruiting++
+      } else if (crime.status === "Expired") {
+        existing.expired++
+      }
+
+      stats.set(crime.name, existing)
     })
 
-    return Array.from(stats.entries())
-      .map(([name, data]) => ({
-        name,
-        successful: data.successful,
-        failed: data.failed,
-        total: data.successful + data.failed,
-        successRate: ((data.successful / (data.successful + data.failed)) * 100).toFixed(1),
-      }))
-      .sort((a, b) => b.total - a.total)
-  }, [crimes])
+    let filteredStats = Array.from(stats.entries()).map(([name, data]) => ({
+      name,
+      successful: data.successful,
+      failed: data.failed,
+      planning: data.planning,
+      recruiting: data.recruiting,
+      expired: data.expired,
+      difficulty: data.difficulty,
+      total: data.successful + data.failed + data.planning + data.recruiting + data.expired,
+      successRate:
+        data.successful + data.failed > 0
+          ? ((data.successful / (data.successful + data.failed)) * 100).toFixed(1)
+          : "N/A",
+    }))
+
+    if (difficultyFilter !== "All") {
+      filteredStats = filteredStats.filter((crime) => {
+        const diff = crime.difficulty
+        if (difficultyFilter === "Easy (1-2)") return diff >= 1 && diff <= 2
+        if (difficultyFilter === "Medium (3-5)") return diff >= 3 && diff <= 5
+        if (difficultyFilter === "Hard (6-8)") return diff >= 6 && diff <= 8
+        if (difficultyFilter === "Expert (9-10)") return diff >= 9 && diff <= 10
+        return true
+      })
+    }
+
+    if (sortBy === "Total") {
+      filteredStats.sort((a, b) => (sortDirection === "desc" ? b.total - a.total : a.total - b.total))
+    } else if (sortBy === "Difficulty") {
+      filteredStats.sort((a, b) =>
+        sortDirection === "desc" ? b.difficulty - a.difficulty : a.difficulty - b.difficulty,
+      )
+    } else if (sortBy === "Success Rate") {
+      filteredStats.sort((a, b) => {
+        const rateA = a.successRate === "N/A" ? -1 : Number.parseFloat(a.successRate)
+        const rateB = b.successRate === "N/A" ? -1 : Number.parseFloat(b.successRate)
+        return sortDirection === "desc" ? rateB - rateA : rateA - rateB
+      })
+    } else if (sortBy === "Name") {
+      filteredStats.sort((a, b) =>
+        sortDirection === "desc" ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name),
+      )
+    }
+
+    return filteredStats
+  }, [crimes, difficultyFilter, sortBy, sortDirection])
 
   const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -257,7 +405,8 @@ export default function ReportsPage() {
       }
 
       if (allCrimes.length > 0) {
-        localStorage.setItem("factionCrimesReport", JSON.stringify(allCrimes))
+        localStorage.setItem("factionHistoricalCrimes", JSON.stringify(allCrimes))
+        localStorage.setItem("lastHistoricalFetch", Date.now().toString())
       }
 
       if (!isPaused) {
@@ -302,17 +451,33 @@ export default function ReportsPage() {
     setExpandedCrimes(newExpanded)
   }
 
+  const getDifficultyColor = (difficulty: number) => {
+    if (difficulty <= 2) return "text-green-400"
+    if (difficulty <= 5) return "text-yellow-400"
+    if (difficulty <= 8) return "text-orange-400"
+    return "text-red-400"
+  }
+
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
       <ItemModal item={selectedItem} onClose={() => setSelectedItem(null)} />
 
       <header className="flex-shrink-0 border-b border-border bg-card p-6">
         <div className="flex items-center justify-between gap-4">
-          <div>
-            <button onClick={() => router.push("/dashboard")} className="hover:opacity-80 transition-opacity">
-              <h1 className="text-3xl font-bold text-foreground">Crime Reports</h1>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="p-2 hover:bg-accent rounded-lg transition-colors border border-border"
+              title="Back to Dashboard"
+            >
+              <ArrowLeft size={20} />
             </button>
-            <p className="text-muted-foreground mt-1">Detailed historical crime data</p>
+            <div>
+              <button onClick={() => router.push("/dashboard")} className="hover:opacity-80 transition-opacity">
+                <h1 className="text-3xl font-bold text-foreground">Crime Reports</h1>
+              </button>
+              <p className="text-muted-foreground mt-1">Detailed historical crime data</p>
+            </div>
           </div>
           <div className="relative">
             <button
@@ -365,9 +530,8 @@ export default function ReportsPage() {
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-5xl mx-auto space-y-6">
-          {/* Total Crimes Card */}
           <div className="bg-card border border-border rounded-lg p-8 text-center">
-            <h2 className="text-xl font-semibold text-muted-foreground mb-4">Total Completed Crimes</h2>
+            <h2 className="text-xl font-semibold text-muted-foreground mb-4">Total Crimes</h2>
             <div className="text-6xl font-bold text-primary mb-2">{totalCrimes.toLocaleString()}</div>
             {isLoading && (
               <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mt-4">
@@ -377,7 +541,6 @@ export default function ReportsPage() {
             )}
           </div>
 
-          {/* Fetch Control */}
           <div className="bg-card border border-border rounded-lg p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-foreground">Fetch Historical Data</h3>
@@ -408,7 +571,6 @@ export default function ReportsPage() {
 
           {crimes.length > 0 && (
             <>
-              {/* Summary Stats */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="bg-card p-3 rounded-lg border border-border/50">
                   <div className="text-xs text-muted-foreground mb-1">Total Value</div>
@@ -428,7 +590,6 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              {/* Status Breakdown */}
               <div className="bg-card p-3 rounded-lg border border-border/50">
                 <div className="text-xs text-muted-foreground mb-2 font-bold">Status Breakdown</div>
                 <div className="flex flex-wrap gap-3 text-sm">
@@ -456,22 +617,99 @@ export default function ReportsPage() {
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-lg font-semibold text-foreground mb-3">Crime-Specific Analysis</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-foreground">Crime-Specific Analysis</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-card border border-border/50 rounded-lg p-4">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1.5 block">Sort By</label>
+                    <div className="flex gap-2">
+                      <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
+                        className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="Total">Total Count</option>
+                        <option value="Difficulty">Difficulty</option>
+                        <option value="Success Rate">Success Rate</option>
+                        <option value="Name">Name</option>
+                      </select>
+                      <button
+                        onClick={() => setSortDirection(sortDirection === "desc" ? "asc" : "desc")}
+                        className="px-3 py-2 bg-background border border-border rounded-lg hover:bg-accent transition-colors"
+                        title={sortDirection === "desc" ? "Sort Descending" : "Sort Ascending"}
+                      >
+                        {sortDirection === "desc" ? <ArrowDown size={18} /> : <ArrowUp size={18} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1.5 block">Filter by Difficulty</label>
+                    <select
+                      value={difficultyFilter}
+                      onChange={(e) => setDifficultyFilter(e.target.value)}
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="All">All Difficulties</option>
+                      <option value="Easy (1-2)">Easy (1-2)</option>
+                      <option value="Medium (3-5)">Medium (3-5)</option>
+                      <option value="Hard (6-8)">Hard (6-8)</option>
+                      <option value="Expert (9-10)">Expert (9-10)</option>
+                    </select>
+                  </div>
+                </div>
+
                 {crimeStats.map((crime) => {
                   const isExpanded = expandedCrimes.has(crime.name)
-                  const pieData = [
-                    {
+                  const pieData = []
+                  const colors = []
+
+                  if (crime.successful > 0) {
+                    pieData.push({
                       x: "Success",
                       y: crime.successful,
-                      label: `Success: ${crime.successful} (${crime.successRate}%)`,
-                    },
-                    {
-                      x: "Fail",
+                      label: `Success: ${crime.successful}`,
+                    })
+                    colors.push("#22c55e")
+                  }
+
+                  if (crime.failed > 0) {
+                    pieData.push({
+                      x: "Failed",
                       y: crime.failed,
-                      label: `Fail: ${crime.failed} (${(100 - Number.parseFloat(crime.successRate)).toFixed(1)}%)`,
-                    },
-                  ]
-                  const colors = ["#22c55e", "#ef4444"]
+                      label: `Failed: ${crime.failed}`,
+                    })
+                    colors.push("#ef4444")
+                  }
+
+                  if (crime.planning > 0) {
+                    pieData.push({
+                      x: "Planning",
+                      y: crime.planning,
+                      label: `Planning: ${crime.planning}`,
+                    })
+                    colors.push("#3b82f6")
+                  }
+
+                  if (crime.recruiting > 0) {
+                    pieData.push({
+                      x: "Recruiting",
+                      y: crime.recruiting,
+                      label: `Recruiting: ${crime.recruiting}`,
+                    })
+                    colors.push("#a855f7")
+                  }
+
+                  if (crime.expired > 0) {
+                    pieData.push({
+                      x: "Expired",
+                      y: crime.expired,
+                      label: `Expired: ${crime.expired}`,
+                    })
+                    colors.push("#6b7280")
+                  }
 
                   return (
                     <div key={crime.name} className="bg-card border border-border/50 rounded-lg overflow-hidden">
@@ -480,11 +718,29 @@ export default function ReportsPage() {
                         className="w-full flex items-center justify-between p-4 hover:bg-accent/50 transition-colors"
                       >
                         <div className="flex items-center gap-4">
-                          <h4 className="font-semibold text-foreground">{crime.name}</h4>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-semibold text-foreground">{crime.name}</h4>
+                            <span className={`text-sm font-bold ${getDifficultyColor(crime.difficulty)}`}>
+                              (Diff: {crime.difficulty})
+                            </span>
+                          </div>
                           <div className="flex items-center gap-3 text-sm">
-                            <span className="text-green-400 font-bold">{crime.successful} Success</span>
-                            <span className="text-red-400 font-bold">{crime.failed} Failed</span>
-                            <span className="text-muted-foreground">({crime.successRate}%)</span>
+                            {crime.successful > 0 && (
+                              <span className="text-green-400 font-bold">{crime.successful} Success</span>
+                            )}
+                            {crime.failed > 0 && <span className="text-red-400 font-bold">{crime.failed} Failed</span>}
+                            {crime.planning > 0 && (
+                              <span className="text-blue-400 font-bold">{crime.planning} Planning</span>
+                            )}
+                            {crime.recruiting > 0 && (
+                              <span className="text-purple-400 font-bold">{crime.recruiting} Recruiting</span>
+                            )}
+                            {crime.expired > 0 && (
+                              <span className="text-gray-400 font-bold">{crime.expired} Expired</span>
+                            )}
+                            {crime.successRate !== "N/A" && (
+                              <span className="text-muted-foreground">({crime.successRate}%)</span>
+                            )}
                           </div>
                         </div>
                         <ChevronDown
@@ -493,7 +749,7 @@ export default function ReportsPage() {
                         />
                       </button>
 
-                      {isExpanded && (
+                      {isExpanded && pieData.length > 0 && (
                         <div className="p-6 border-t border-border/50 animate-in fade-in duration-200">
                           <div className="flex justify-center">
                             <svg width={300} height={300} style={{ overflow: "visible" }}>
@@ -517,7 +773,7 @@ export default function ReportsPage() {
                               />
                             </svg>
                           </div>
-                          <div className="flex justify-center gap-4 mt-4">
+                          <div className="flex justify-center gap-4 mt-4 flex-wrap">
                             {pieData.map((entry, index) => (
                               <div key={`legend-${index}`} className="flex items-center gap-2">
                                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[index] }} />
