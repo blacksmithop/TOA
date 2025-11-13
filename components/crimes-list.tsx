@@ -5,6 +5,7 @@ import type React from "react"
 import { useMemo, useState, useEffect, useRef, useCallback } from "react"
 import { ChevronDown, ArrowUpDown, RefreshCw } from "lucide-react"
 import ItemModal from "./item-modal"
+import { canReloadIndividualCrimes } from "@/lib/api-scopes"
 
 interface Slot {
   position: string
@@ -86,6 +87,7 @@ export default function CrimesList({
   const [currentTime, setCurrentTime] = useState(Date.now() / 1000)
   const [reloadingCrimes, setReloadingCrimes] = useState<Set<number>>(new Set())
   const [visibleCrimes, setVisibleCrimes] = useState<{ [key: string]: number }>({})
+  const [canReloadCrimes, setCanReloadCrimes] = useState(true)
   const observerRef = useRef<{ [key: string]: IntersectionObserver | null }>({})
   const loadMoreRef = useRef<{ [key: string]: HTMLDivElement | null }>({})
 
@@ -94,6 +96,10 @@ export default function CrimesList({
       setCurrentTime(Date.now() / 1000)
     }, 1000)
     return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    setCanReloadCrimes(canReloadIndividualCrimes())
   }, [])
 
   const memberMap = useMemo(() => {
@@ -445,7 +451,7 @@ export default function CrimesList({
                             >
                               {crime.id}
                             </button>
-                            {onCrimeReload && canReload && (
+                            {onCrimeReload && canReload && canReloadCrimes && (
                               <button
                                 onClick={() => handleReloadCrime(crime.id)}
                                 disabled={isReloading}

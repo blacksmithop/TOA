@@ -3,11 +3,15 @@
 import { useEffect, useState, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { RefreshCw, LogOut, MoreVertical, ArrowLeft, Info, RotateCcw } from "lucide-react"
+import { LogOut, MoreVertical, ArrowLeft, Info, RotateCcw } from "lucide-react"
 import CrimesList from "@/components/crimes-list"
 import CrimeSummary from "@/components/crime-summary"
 import { fetchAndCacheItems } from "@/lib/items-cache"
 import type { TornItem } from "@/lib/items-cache"
+import { handleApiError, validateApiResponse } from "@/lib/api-error-handler"
+import { ResetConfirmationDialog } from "@/components/reset-confirmation-dialog"
+import { clearAllCache } from "@/lib/cache-reset"
+import { handleFullLogout } from "@/lib/logout-handler"
 
 interface Member {
   id: number
@@ -65,7 +69,7 @@ export default function CrimesPage() {
   const [filteredMemberId, setFilteredMemberId] = useState<number | null>(null)
   const [minPassRate, setMinPassRate] = useState(65)
   const [historicalCrimes, setHistoricalCrimes] = useState<Crime[]>([])
-  const [showReloadModal, setShowReloadModal] = useState(false)
+  const [resetDialogOpen, setResetDialogOpen] = useState(false)
   const historicalCrimesLengthRef = useRef(0)
 
   useEffect(() => {
@@ -120,24 +124,6 @@ export default function CrimesPage() {
       setFilteredMemberId(null)
     }
   }, [searchParams])
-
-  const handleApiError = async (response: Response, endpoint: string) => {
-    try {
-      const errorData = await response.json()
-      if (errorData.error?.code === 2) {
-        const scope = endpoint.includes("/faction/members")
-          ? "members"
-          : endpoint.includes("/faction/crimes")
-            ? "crimes"
-            : "unknown"
-        throw new Error(`API key does not have access to ${scope}`)
-      }
-      throw new Error(errorData.error?.error || "API request failed")
-    } catch (e) {
-      if (e instanceof Error) throw e
-      throw new Error("Failed to fetch data")
-    }
-  }
 
   const loadFromStoredData = (apiKey: string) => {
     console.log("[v0] Loading from stored data")
@@ -227,13 +213,12 @@ export default function CrimesPage() {
         headers: { Authorization: `ApiKey ${apiKey}`, accept: "application/json" },
       })
 
-      if (!membersRes.ok) await handleApiError(membersRes, "/faction/members")
-      const membersData = await membersRes.json()
-
-      if (membersData.error) {
-        if (membersData.error.code === 2) throw new Error("API key does not have access to members")
-        throw new Error(membersData.error.error || "Failed to fetch members")
+      if (!membersRes.ok) {
+        await handleApiError(membersRes, "/faction/members")
       }
+
+      const membersData = await membersRes.json()
+      validateApiResponse(membersData, "/faction/members")
 
       setMembers(Object.values(membersData.members || {}))
 
@@ -241,13 +226,12 @@ export default function CrimesPage() {
         headers: { Authorization: `ApiKey ${apiKey}`, accept: "application/json" },
       })
 
-      if (!crimesRes.ok) await handleApiError(crimesRes, "/faction/crimes")
-      const crimesData = await crimesRes.json()
-
-      if (crimesData.error) {
-        if (crimesData.error.code === 2) throw new Error("API key does not have access to crimes")
-        throw new Error(crimesData.error.error || "Failed to fetch crimes")
+      if (!crimesRes.ok) {
+        await handleApiError(crimesRes, "/faction/crimes")
       }
+
+      const crimesData = await crimesRes.json()
+      validateApiResponse(crimesData, "/faction/crimes")
 
       const currentCrimes = Object.values(crimesData.crimes || {})
 
@@ -301,7 +285,7 @@ export default function CrimesPage() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem("factionApiKey")
+    handleFullLogout()
     toast({
       title: "Success",
       description: "Logged out successfully",
@@ -323,29 +307,30 @@ export default function CrimesPage() {
     }
   }
 
-  const handleReloadAll = async () => {
+  const handleReset = async () => {
     const apiKey = localStorage.getItem("factionApiKey")
     if (!apiKey) return
 
-    setShowReloadModal(false)
     setIsLoading(true)
 
     try {
-      localStorage.removeItem("factionHistoricalCrimes")
-      localStorage.removeItem("lastHistoricalFetch")
-      localStorage.removeItem("factionMembers")
-      localStorage.removeItem("tornItems")
+      clearAllCache()
+
+      setHistoricalCrimes([])
+      setCrimes([])
+      setItems(new Map())
+      setMembers([])
 
       await fetchData(apiKey)
 
       toast({
         title: "Success",
-        description: "All data reloaded successfully",
+        description: "Cache cleared and data refreshed from API",
       })
     } catch (err) {
       toast({
         title: "Error",
-        description: "Failed to reload data",
+        description: "Failed to reset data",
         variant: "destructive",
       })
     } finally {
@@ -369,7 +354,7 @@ export default function CrimesPage() {
       }
 
       const data = await response.json()
-      if (data.error) throw new Error(data.error.error || "Failed to reload crime")
+      validateApiResponse(data, `/faction/${crimeId}/crime`)
 
       const updatedCrime = data.crime
       setCrimes((prevCrimes) =>
@@ -420,31 +405,7 @@ export default function CrimesPage() {
 
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
-      {showReloadModal && (
-        <>
-          <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setShowReloadModal(false)} />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card border border-border rounded-lg p-6 z-50 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-3">Reload All Data?</h3>
-            <p className="text-sm text-muted-foreground mb-6">
-              This will clear all cached data and fetch fresh information from the API. This action cannot be undone.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowReloadModal(false)}
-                className="px-4 py-2 border border-border rounded-lg hover:bg-accent transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleReloadAll}
-                className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 transition-colors"
-              >
-                Reload All
-              </button>
-            </div>
-          </div>
-        </>
-      )}
+      <ResetConfirmationDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen} onConfirm={handleReset} />
 
       <header className="flex-shrink-0 border-b border-border bg-card p-6">
         <div className="flex items-center justify-between gap-4">
@@ -487,24 +448,14 @@ export default function CrimesPage() {
                   </button>
                   <button
                     onClick={() => {
-                      handleRefresh()
                       setDropdownOpen(false)
+                      setResetDialogOpen(true)
                     }}
                     disabled={refreshing}
                     className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-accent transition-colors disabled:opacity-50 border-t border-border"
                   >
-                    <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
-                    {refreshing ? "Refreshing..." : "Refresh"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowReloadModal(true)
-                      setDropdownOpen(false)
-                    }}
-                    className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-accent transition-colors border-t border-border"
-                  >
                     <RotateCcw size={18} />
-                    Reload All
+                    Reset
                   </button>
                   <button
                     onClick={() => {

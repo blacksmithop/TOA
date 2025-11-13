@@ -16,10 +16,13 @@ import {
   Settings,
   X,
   ArrowLeft,
+  AlertTriangle,
 } from "lucide-react"
 import { fetchAndCacheItems } from "@/lib/items-cache"
 import type { TornItem } from "@/lib/items-cache"
 import ItemModal from "@/components/item-modal"
+import { crimeApiCache } from "@/lib/crime-api-cache"
+import { handleFullLogout } from "@/lib/logout-handler"
 
 interface ArmoryNewsItem {
   uuid: string
@@ -207,6 +210,7 @@ export default function ArmoryPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isFetching, setIsFetching] = useState(false)
+  const [fetchProgress, setFetchProgress] = useState({ current: 0, max: 0 })
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedCategory, setSelectedCategory] = useState<string>("All")
@@ -218,6 +222,7 @@ export default function ArmoryPage() {
   const [showConfigModal, setShowConfigModal] = useState(false)
   const [maxFetchCount, setMaxFetchCount] = useState(1000)
   const [tempMaxFetch, setTempMaxFetch] = useState(1000)
+  const [hasArmoryAccess, setHasArmoryAccess] = useState<boolean>(true) // Added state to track armory API access
 
   useEffect(() => {
     const apiKey = localStorage.getItem("factionApiKey")
@@ -280,15 +285,26 @@ export default function ArmoryPage() {
   const fetchArmoryNews = async (
     factionId: string,
     to?: number,
+    skipCache = false,
   ): Promise<Record<string, { news: string; timestamp: number }>> => {
     const apiKey = localStorage.getItem("factionApiKey")
     if (!apiKey) throw new Error("No API key found")
+
+    if (!skipCache && to) {
+      const cacheKey = `armory_to_${to}`
+      const cachedData = crimeApiCache.get(cacheKey)
+      if (cachedData) {
+        console.log(`[v0] Armory API cache HIT for timestamp: ${to}`)
+        return cachedData
+      }
+    }
 
     let url = `https://api.torn.com/faction/${factionId}?selections=armorynews&striptags=true`
     if (to) {
       url += `&to=${to}`
     }
 
+    console.log(`[v0] Fetching armory news from API${to ? ` (to=${to})` : " (fresh)"}`)
     const response = await fetch(url, {
       headers: {
         Authorization: `ApiKey ${apiKey}`,
@@ -301,11 +317,24 @@ export default function ArmoryPage() {
     }
 
     const data = await response.json()
+
     if (data.error) {
+      if (data.error.code === 16 || data.error.code === 2) {
+        setHasArmoryAccess(false)
+        throw new Error("API_ACCESS_DENIED")
+      }
       throw new Error(data.error.error || "API error")
     }
 
-    return data.armorynews || {}
+    const armorynews = data.armorynews || {}
+
+    if (to) {
+      const cacheKey = `armory_to_${to}`
+      crimeApiCache.set(cacheKey, armorynews)
+      console.log(`[v0] Cached armory response for timestamp: ${to}`)
+    }
+
+    return armorynews
   }
 
   const handleFetchHistorical = async () => {
@@ -322,9 +351,11 @@ export default function ArmoryPage() {
     }
 
     setIsFetching(true)
+    setHasArmoryAccess(true)
+    setFetchProgress({ current: 0, max: maxFetchCount })
     const allNews: ArmoryNewsItem[] = []
     const seenUuids = new Set<string>()
-    let toTimestamp: number | undefined = Math.floor(Date.now() / 1000)
+    let toTimestamp: number | undefined = undefined
     let lastOldestId: string | null = null
 
     try {
@@ -333,10 +364,37 @@ export default function ArmoryPage() {
         description: "Starting armory news fetch...",
       })
 
-      while (allNews.length < maxFetchCount) {
-        const rawNews = await fetchArmoryNews(factionId, toTimestamp)
+      console.log("[v0] Fetching latest armory news (fresh, not cached)")
+      const rawNews = await fetchArmoryNews(factionId, undefined, true)
+
+      if (Object.keys(rawNews).length > 0) {
+        for (const [uuid, data] of Object.entries(rawNews)) {
+          if (!seenUuids.has(uuid)) {
+            seenUuids.add(uuid)
+            const parsed = parseArmoryNews(uuid, data.timestamp, data.news)
+            if (parsed) {
+              allNews.push(parsed)
+            }
+          }
+        }
+
+        allNews.sort((a, b) => b.timestamp - a.timestamp)
+
+        if (allNews.length > 0) {
+          const oldestInBatch = allNews[allNews.length - 1]
+          lastOldestId = oldestInBatch.uuid
+          toTimestamp = oldestInBatch.timestamp
+        }
+
+        setFetchProgress({ current: allNews.length, max: maxFetchCount })
+      }
+
+      while (allNews.length < maxFetchCount && toTimestamp) {
+        console.log(`[v0] Fetching armory news with to=${toTimestamp}`)
+        const rawNews = await fetchArmoryNews(factionId, toTimestamp, false)
 
         if (Object.keys(rawNews).length === 0) {
+          console.log("[v0] No more armory news to fetch")
           break
         }
 
@@ -352,6 +410,7 @@ export default function ArmoryPage() {
         }
 
         if (batch.length === 0) {
+          console.log("[v0] No new unique logs in this batch, stopping")
           break
         }
 
@@ -359,15 +418,18 @@ export default function ArmoryPage() {
 
         const oldestInBatch = batch[batch.length - 1]
         if (lastOldestId === oldestInBatch.uuid) {
+          console.log("[v0] Reached end of pagination (same oldest ID)")
           break
         }
 
         lastOldestId = oldestInBatch.uuid
         allNews.push(...batch)
 
+        setFetchProgress({ current: allNews.length, max: maxFetchCount })
+
         toast({
           title: "Fetching",
-          description: `Fetched ${allNews.length} armory logs...`,
+          description: `Fetched ${allNews.length}/${maxFetchCount} armory logs...`,
         })
 
         toTimestamp = oldestInBatch.timestamp
@@ -375,6 +437,7 @@ export default function ArmoryPage() {
         await new Promise((resolve) => setTimeout(resolve, 2000))
 
         if (allNews.length >= maxFetchCount) {
+          console.log("[v0] Reached max fetch count")
           break
         }
       }
@@ -385,23 +448,36 @@ export default function ArmoryPage() {
       setArmoryNews(finalNews)
       localStorage.setItem("armoryNews", JSON.stringify(finalNews))
 
+      console.log(`[v0] Completed fetching ${finalNews.length} armory logs`)
+
       toast({
         title: "Success",
         description: `Fetched ${finalNews.length} armory logs`,
       })
     } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to fetch armory news",
-        variant: "destructive",
-      })
+      console.error("[v0] Error fetching armory news:", error)
+      if (error instanceof Error && error.message === "API_ACCESS_DENIED") {
+        toast({
+          title: "API Access Denied",
+          description:
+            "Your API key does not have access to armory data. Please generate a new key with the 'armorynews' scope.",
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Failed to fetch armory news",
+          variant: "destructive",
+        })
+      }
     } finally {
       setIsFetching(false)
+      setFetchProgress({ current: 0, max: 0 })
     }
   }
 
   const handleLogout = () => {
-    localStorage.removeItem("factionApiKey")
+    handleFullLogout()
     toast({
       title: "Success",
       description: "Logged out successfully",
@@ -684,7 +760,7 @@ export default function ArmoryPage() {
                 {isFetching ? (
                   <>
                     <RefreshCw size={20} className="animate-spin" />
-                    Fetching...
+                    Fetching {fetchProgress.current}/{fetchProgress.max}...
                   </>
                 ) : (
                   <>
@@ -965,7 +1041,29 @@ export default function ArmoryPage() {
             </div>
           )}
 
-          {armoryNews.length === 0 && !isFetching && (
+          {armoryNews.length === 0 && !isFetching && !hasArmoryAccess && (
+            <div className="bg-card border border-destructive rounded-lg p-12 text-center">
+              <AlertTriangle size={48} className="mx-auto text-destructive mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">API Key Missing Armory Access</h3>
+              <p className="text-muted-foreground mb-4">
+                Your API key does not have the required permissions to access armory data.
+              </p>
+              <p className="text-sm text-muted-foreground mb-4">
+                Please generate a new API key with the <span className="font-mono text-foreground">armorynews</span>{" "}
+                scope enabled.
+              </p>
+              <a
+                href="https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=Faction%20Info%20App&key=&user=1&selections%5B%5D=basic&selections%5B%5D=crimes&selections%5B%5D=armorynews&selections%5B%5D=timestamp&faction=1&factionSelections%5B%5D=basic&factionSelections%5B%5D=timestamp&factionSelections%5B%5D=crimes&factionSelections%5B%5D=contributors&factionSelections%5B%5D=armorynews"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                Generate New API Key
+              </a>
+            </div>
+          )}
+
+          {armoryNews.length === 0 && !isFetching && hasArmoryAccess && (
             <div className="bg-card border border-border rounded-lg p-12 text-center">
               <Package size={48} className="mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium text-foreground mb-2">No Armory Logs</h3>

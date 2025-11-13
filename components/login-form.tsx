@@ -5,6 +5,8 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
+import { handleApiError, validateApiResponse } from "@/lib/api-error-handler"
+import ApiKeyBuilder from "@/components/api-key-builder"
 
 interface LoginFormProps {
   onLogin?: (apiKey: string) => void
@@ -28,14 +30,12 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
         },
       })
 
-      const basicData = await basicResponse.json()
-
-      if (basicData.error) {
-        if (basicData.error.code === 2) {
-          throw new Error("API key does not have access to basic faction information")
-        }
-        throw new Error(basicData.error.error || "Invalid API key")
+      if (!basicResponse.ok) {
+        await handleApiError(basicResponse, "/faction/basic")
       }
+
+      const basicData = await basicResponse.json()
+      validateApiResponse(basicData, "/faction/basic")
 
       const factionId = basicData.basic?.id
 
@@ -46,14 +46,12 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
         },
       })
 
-      const membersData = await membersResponse.json()
-
-      if (membersData.error) {
-        if (membersData.error.code === 2) {
-          throw new Error("API key does not have access to members")
-        }
-        throw new Error(membersData.error.error || "Invalid API key or insufficient permissions")
+      if (!membersResponse.ok) {
+        await handleApiError(membersResponse, "/faction/members")
       }
+
+      const membersData = await membersResponse.json()
+      validateApiResponse(membersData, "/faction/members")
 
       localStorage.setItem("factionApiKey", apiKey)
       localStorage.setItem("factionId", factionId.toString())
@@ -70,11 +68,13 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
       }, 500)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to authenticate"
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      })
+      if (!errorMessage.includes("access") && !errorMessage.includes("scope")) {
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        })
+      }
     } finally {
       setIsLoading(false)
     }
@@ -92,16 +92,9 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
           className="w-full px-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-all"
           required
         />
-        <p className="text-center text-base text-muted-foreground mt-4">
-          <a
-            href="https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=TornOCApp&faction=armorynews,basic,crime,crimes,members&torn=items"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline"
-          >
-            Create a Custom API Key
-          </a>
-        </p>
+        <div className="mt-4">
+          <ApiKeyBuilder />
+        </div>
       </div>
 
       <div className="bg-card/50 border border-border rounded-lg p-4 space-y-2">

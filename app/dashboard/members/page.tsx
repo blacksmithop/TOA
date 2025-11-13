@@ -3,9 +3,13 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { RefreshCw, LogOut, MoreVertical, ArrowLeft, Info } from "lucide-react"
+import { LogOut, MoreVertical, ArrowLeft, Info, RotateCcw } from "lucide-react"
 import MemberList from "@/components/member-list"
 import { fetchAndCacheItems } from "@/lib/items-cache"
+import { handleApiError, validateApiResponse } from "@/lib/api-error-handler"
+import { ResetConfirmationDialog } from "@/components/reset-confirmation-dialog"
+import { clearAllCache } from "@/lib/cache-reset"
+import { handleFullLogout } from "@/lib/logout-handler"
 
 interface Member {
   id: number
@@ -54,6 +58,7 @@ export default function MembersPage() {
     activityRange: [0, 7],
     levelRange: [1, 100],
   })
+  const [resetDialogOpen, setResetDialogOpen] = useState(false)
 
   useEffect(() => {
     const apiKey = localStorage.getItem("factionApiKey")
@@ -67,24 +72,6 @@ export default function MembersPage() {
     fetchData(apiKey)
   }, [router])
 
-  const handleApiError = async (response: Response, endpoint: string) => {
-    try {
-      const errorData = await response.json()
-      if (errorData.error?.code === 2) {
-        const scope = endpoint.includes("/faction/members")
-          ? "members"
-          : endpoint.includes("/faction/crimes")
-            ? "crimes"
-            : "unknown"
-        throw new Error(`API key does not have access to ${scope}`)
-      }
-      throw new Error(errorData.error?.error || "API request failed")
-    } catch (e) {
-      if (e instanceof Error) throw e
-      throw new Error("Failed to fetch data")
-    }
-  }
-
   const fetchData = async (apiKey: string) => {
     setIsLoading(true)
 
@@ -95,13 +82,12 @@ export default function MembersPage() {
         headers: { Authorization: `ApiKey ${apiKey}`, accept: "application/json" },
       })
 
-      if (!membersRes.ok) await handleApiError(membersRes, "/faction/members")
-      const membersData = await membersRes.json()
-
-      if (membersData.error) {
-        if (membersData.error.code === 2) throw new Error("API key does not have access to members")
-        throw new Error(membersData.error.error || "Failed to fetch members")
+      if (!membersRes.ok) {
+        await handleApiError(membersRes, "/faction/members")
       }
+
+      const membersData = await membersRes.json()
+      validateApiResponse(membersData, "/faction/members")
 
       setMembers(Object.values(membersData.members || {}))
 
@@ -109,13 +95,12 @@ export default function MembersPage() {
         headers: { Authorization: `ApiKey ${apiKey}`, accept: "application/json" },
       })
 
-      if (!crimesRes.ok) await handleApiError(crimesRes, "/faction/crimes")
-      const crimesData = await crimesRes.json()
-
-      if (crimesData.error) {
-        if (crimesData.error.code === 2) throw new Error("API key does not have access to crimes")
-        throw new Error(crimesData.error.error || "Failed to fetch crimes")
+      if (!crimesRes.ok) {
+        await handleApiError(crimesRes, "/faction/crimes")
       }
+
+      const crimesData = await crimesRes.json()
+      validateApiResponse(crimesData, "/faction/crimes")
 
       const currentCrimes = Object.values(crimesData.crimes || {})
       const crimeMap = new Map<number, Crime>()
@@ -150,7 +135,7 @@ export default function MembersPage() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem("factionApiKey")
+    handleFullLogout()
     toast({
       title: "Success",
       description: "Logged out successfully",
@@ -209,6 +194,36 @@ export default function MembersPage() {
 
   const activeRecruitingCrimes = crimes.filter((crime) => crime.status === "Recruiting" || crime.status === "Planning")
 
+  const handleReset = async () => {
+    const apiKey = localStorage.getItem("factionApiKey")
+    if (!apiKey) return
+
+    setIsLoading(true)
+
+    try {
+      clearAllCache()
+
+      setHistoricalCrimes([])
+      setCrimes([])
+      setMembers([])
+
+      await fetchData(apiKey)
+
+      toast({
+        title: "Success",
+        description: "Cache cleared and data refreshed from API",
+      })
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to reset data",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -219,6 +234,8 @@ export default function MembersPage() {
 
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
+      <ResetConfirmationDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen} onConfirm={handleReset} />
+
       <header className="flex-shrink-0 border-b border-border bg-card p-6">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -260,14 +277,14 @@ export default function MembersPage() {
                   </button>
                   <button
                     onClick={() => {
-                      handleRefresh()
                       setDropdownOpen(false)
+                      setResetDialogOpen(true)
                     }}
                     disabled={refreshing}
                     className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-accent transition-colors disabled:opacity-50 border-t border-border"
                   >
-                    <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
-                    {refreshing ? "Refreshing..." : "Refresh"}
+                    <RotateCcw size={18} />
+                    Reset
                   </button>
                   <button
                     onClick={() => {

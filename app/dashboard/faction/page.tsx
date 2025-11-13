@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { RefreshCw, LogOut, MoreVertical, ArrowLeft, Users, Award, TrendingUp, Calendar, Crown } from "lucide-react"
+import { LogOut, MoreVertical, ArrowLeft, Users, Award, TrendingUp, Calendar, Crown, RotateCcw } from "lucide-react"
 import { Card } from "@/components/ui/card"
+import { ResetConfirmationDialog } from "@/components/reset-confirmation-dialog"
+import { clearAllCache } from "@/lib/cache-reset"
+import { handleFullLogout } from "@/lib/logout-handler"
 
 interface FactionBasic {
   id: number
@@ -41,6 +44,7 @@ export default function FactionPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [resetDialogOpen, setResetDialogOpen] = useState(false)
 
   useEffect(() => {
     const apiKey = localStorage.getItem("factionApiKey")
@@ -112,7 +116,7 @@ export default function FactionPage() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem("factionApiKey")
+    handleFullLogout()
     toast({
       title: "Success",
       description: "Logged out successfully",
@@ -132,6 +136,35 @@ export default function FactionPage() {
         title: "Success",
         description: "Data refreshed successfully",
       })
+    }
+  }
+
+  const handleReset = async () => {
+    const apiKey = localStorage.getItem("factionApiKey")
+    if (!apiKey) return
+
+    setIsLoading(true)
+
+    try {
+      clearAllCache()
+
+      setFactionData(null)
+      setMembers([])
+
+      await fetchFactionData(apiKey)
+
+      toast({
+        title: "Success",
+        description: "Cache cleared and data refreshed from API",
+      })
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to reset data",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -157,6 +190,8 @@ export default function FactionPage() {
 
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
+      <ResetConfirmationDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen} onConfirm={handleReset} />
+
       <header className="flex-shrink-0 border-b border-border bg-card p-6">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -186,14 +221,14 @@ export default function FactionPage() {
                 <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
                   <button
                     onClick={() => {
-                      handleRefresh()
                       setDropdownOpen(false)
+                      setResetDialogOpen(true)
                     }}
                     disabled={refreshing}
                     className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-accent transition-colors disabled:opacity-50"
                   >
-                    <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
-                    {refreshing ? "Refreshing..." : "Refresh"}
+                    <RotateCcw size={18} />
+                    Reset
                   </button>
                   <button
                     onClick={() => {

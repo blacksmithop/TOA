@@ -4,11 +4,17 @@ import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { RefreshCw, LogOut, MoreVertical, Users, Shield, Info, FileText, Package } from "lucide-react"
+import { RefreshCw, LogOut, MoreVertical, Users, Shield, Info, FileText, Package, RotateCcw } from "lucide-react"
 import { fetchAndCacheItems } from "@/lib/items-cache"
 import type { TornItem } from "@/lib/items-cache"
 import CrimeSummary from "@/components/crime-summary"
 import CrimeSuccessCharts from "@/components/crime-success-charts"
+import { handleApiError, validateApiResponse } from "@/lib/api-error-handler"
+import { ResetConfirmationDialog } from "@/components/reset-confirmation-dialog"
+import { clearAllCache } from "@/lib/cache-reset"
+import { crimeApiCache } from "@/lib/crime-api-cache"
+import { canAccessArmory } from "@/lib/api-scopes"
+import { handleFullLogout } from "@/lib/logout-handler"
 
 interface Crime {
   id: number
@@ -34,6 +40,8 @@ export default function Dashboard() {
   const [historicalProgress, setHistoricalProgress] = useState({ current: 0, total: 0 })
   const [historicalCrimes, setHistoricalCrimes] = useState<Crime[]>([])
   const [historicalFetchComplete, setHistoricalFetchComplete] = useState(false)
+  const [resetDialogOpen, setResetDialogOpen] = useState(false)
+  const [hasArmoryScope, setHasArmoryScope] = useState(true)
 
   const allCrimes = useMemo(() => {
     const crimeMap = new Map<number, Crime>()
@@ -56,6 +64,8 @@ export default function Dashboard() {
       return
     }
 
+    setHasArmoryScope(canAccessArmory())
+
     const cached = localStorage.getItem("factionHistoricalCrimes")
     if (cached) {
       try {
@@ -72,31 +82,6 @@ export default function Dashboard() {
       fetchHistoricalCrimes(apiKey)
     }, 1000)
   }, [router])
-
-  const handleApiError = async (response: Response, endpoint: string) => {
-    try {
-      const errorData = await response.json()
-
-      if (errorData.error?.code === 2) {
-        const scope = endpoint.includes("/faction/members")
-          ? "members"
-          : endpoint.includes("/faction/crimes")
-            ? "crimes"
-            : endpoint.includes("/faction/basic")
-              ? "basic"
-              : endpoint.includes("/torn/items")
-                ? "items"
-                : "unknown"
-
-        throw new Error(`API key does not have access to ${scope}`)
-      }
-
-      throw new Error(errorData.error?.error || "API request failed")
-    } catch (e) {
-      if (e instanceof Error) throw e
-      throw new Error("Failed to fetch data")
-    }
-  }
 
   const fetchData = async (apiKey: string) => {
     setIsLoading(true)
@@ -117,13 +102,7 @@ export default function Dashboard() {
       }
 
       const membersData = await membersRes.json()
-
-      if (membersData.error) {
-        if (membersData.error.code === 2) {
-          throw new Error("API key does not have access to members")
-        }
-        throw new Error(membersData.error.error || "Failed to fetch members")
-      }
+      validateApiResponse(membersData, "/faction/members")
 
       setMemberCount(Object.keys(membersData.members || {}).length)
 
@@ -139,13 +118,7 @@ export default function Dashboard() {
       }
 
       const crimesData = await crimesRes.json()
-
-      if (crimesData.error) {
-        if (crimesData.error.code === 2) {
-          throw new Error("API key does not have access to crimes")
-        }
-        throw new Error(crimesData.error.error || "Failed to load data")
-      }
+      validateApiResponse(crimesData, "/faction/crimes")
 
       setCrimes(Object.values(crimesData.crimes || {}))
 
@@ -189,21 +162,9 @@ export default function Dashboard() {
     const REQUEST_DELAY = 2500
 
     try {
-      const firstResponse = await fetch(
-        `https://api.torn.com/v2/faction/crimes?cat=completed&sort=DESC&striptags=true`,
-        {
-          headers: {
-            Authorization: `ApiKey ${apiKey}`,
-            accept: "application/json",
-          },
-        },
-      )
-
-      if (!firstResponse.ok) {
-        throw new Error("Failed to fetch crimes data")
-      }
-
-      const firstData = await firstResponse.json()
+      console.log("[v0] Fetching latest crimes (fresh, not cached)")
+      const firstUrl = `https://api.torn.com/v2/faction/crimes?cat=completed&sort=DESC&striptags=true`
+      const firstData = await crimeApiCache.fetchWithCache(firstUrl, apiKey, true)
 
       if (firstData.crimes) {
         const crimesArray = Object.values(firstData.crimes)
@@ -229,22 +190,8 @@ export default function Dashboard() {
         await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY))
         requestCount++
 
-        const response = await fetch(
-          `https://api.torn.com/v2/faction/crimes?cat=completed&sort=DESC&to=${oldestTimestamp}&striptags=true`,
-          {
-            headers: {
-              Authorization: `ApiKey ${apiKey}`,
-              accept: "application/json",
-            },
-          },
-        )
-
-        if (!response.ok) {
-          console.error(`Failed to fetch crimes batch ${requestCount}`)
-          break
-        }
-
-        const data = await response.json()
+        const historicalUrl = `https://api.torn.com/v2/faction/crimes?cat=completed&sort=DESC&to=${oldestTimestamp}&striptags=true`
+        const data = await crimeApiCache.fetchWithCache(historicalUrl, apiKey, false)
 
         if (data.crimes && Object.keys(data.crimes).length > 0) {
           const crimesArray = Object.values(data.crimes)
@@ -283,7 +230,7 @@ export default function Dashboard() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem("factionApiKey")
+    handleFullLogout()
     toast({
       title: "Success",
       description: "Logged out successfully",
@@ -302,6 +249,30 @@ export default function Dashboard() {
       toast({
         title: "Success",
         description: "Data refreshed successfully",
+      })
+    }
+  }
+
+  const handleReset = async () => {
+    const apiKey = localStorage.getItem("factionApiKey")
+    if (apiKey) {
+      clearAllCache()
+
+      setHistoricalCrimes([])
+      setHistoricalFetchComplete(false)
+      setCrimes([])
+      setItems(new Map())
+
+      setRefreshing(true)
+      await fetchData(apiKey)
+      setTimeout(() => {
+        fetchHistoricalCrimes(apiKey)
+      }, 1000)
+      setRefreshing(false)
+
+      toast({
+        title: "Success",
+        description: "Cache cleared and data refreshed from API",
       })
     }
   }
@@ -354,14 +325,14 @@ export default function Dashboard() {
                   </button>
                   <button
                     onClick={() => {
-                      handleRefresh()
                       setDropdownOpen(false)
+                      setResetDialogOpen(true)
                     }}
                     disabled={refreshing}
                     className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-accent transition-colors disabled:opacity-50 border-t border-border"
                   >
-                    <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
-                    {refreshing ? "Refreshing..." : "Refresh"}
+                    <RotateCcw size={18} />
+                    Reset
                   </button>
                   <button
                     onClick={() => {
@@ -379,6 +350,8 @@ export default function Dashboard() {
           </div>
         </div>
       </header>
+
+      <ResetConfirmationDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen} onConfirm={handleReset} />
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-5xl mx-auto space-y-6">
@@ -449,8 +422,10 @@ export default function Dashboard() {
 
             <Link
               href="/dashboard/armory"
-              className={`bg-card border border-border rounded-lg p-4 hover:border-orange-500 transition-all text-left group block ${
-                !historicalFetchComplete ? "pointer-events-none opacity-50" : "cursor-pointer"
+              className={`bg-card border rounded-lg p-4 transition-all text-left group block ${
+                !historicalFetchComplete || !hasArmoryScope
+                  ? "pointer-events-none opacity-40 border-border/50"
+                  : "border-border hover:border-orange-500 cursor-pointer"
               }`}
               onClick={(e) => {
                 if (!historicalFetchComplete) {
@@ -460,21 +435,38 @@ export default function Dashboard() {
                     description: "Historical data is still loading...",
                     variant: "destructive",
                   })
+                } else if (!hasArmoryScope) {
+                  e.preventDefault()
+                  toast({
+                    title: "Feature Unavailable",
+                    description: "Your API key does not have 'armorynews' scope. Please regenerate your key.",
+                    variant: "destructive",
+                  })
                 }
               }}
             >
               <div className="flex items-center gap-3 mb-2">
-                <div className="bg-orange-500/20 p-2 rounded-lg border border-orange-500/40">
-                  <Package size={20} className="text-orange-500" />
+                <div
+                  className={`p-2 rounded-lg border ${
+                    hasArmoryScope ? "bg-orange-500/20 border-orange-500/40" : "bg-gray-500/20 border-gray-500/40"
+                  }`}
+                >
+                  <Package size={20} className={hasArmoryScope ? "text-orange-500" : "text-gray-500"} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-lg font-bold text-foreground group-hover:text-orange-500 transition-colors">
+                  <h2
+                    className={`text-lg font-bold transition-colors ${
+                      hasArmoryScope ? "text-foreground group-hover:text-orange-500" : "text-muted-foreground"
+                    }`}
+                  >
                     Armory
                   </h2>
-                  <p className="text-xs text-muted-foreground">View armory logs</p>
+                  <p className="text-xs text-muted-foreground">
+                    {hasArmoryScope ? "View armory logs" : "Scope not available"}
+                  </p>
                 </div>
               </div>
-              <div className="text-3xl font-bold text-orange-500 mb-1">
+              <div className={`text-3xl font-bold mb-1 ${hasArmoryScope ? "text-orange-500" : "text-gray-500"}`}>
                 <Package size={32} />
               </div>
               <p className="text-xs text-muted-foreground">Historical armory activity</p>
