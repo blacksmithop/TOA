@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { RefreshCw, LogOut, MoreVertical, Users, Shield, Info, FileText } from "lucide-react"
+import { RefreshCw, LogOut, MoreVertical, Users, Shield, Info, FileText, Package } from "lucide-react"
 import { fetchAndCacheItems } from "@/lib/items-cache"
 import type { TornItem } from "@/lib/items-cache"
 import CrimeSummary from "@/components/crime-summary"
@@ -230,73 +231,95 @@ export default function Dashboard() {
           {/* Summary Section */}
           {crimes.length > 0 && <CrimeSummary crimes={crimes} items={items} />}
 
-          {/* Success Rate Charts */}
-          {crimes.length > 0 && <CrimeSuccessCharts crimes={crimes} />}
-
           {/* Navigation Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Members Card */}
-            <button
-              onClick={() => router.push("/dashboard/members")}
-              className="bg-card border border-border rounded-lg p-6 hover:border-primary transition-all text-left group"
+            <Link
+              href="/dashboard/members"
+              className="bg-card border border-border rounded-lg p-4 hover:border-primary transition-all text-left group cursor-pointer block"
             >
-              <div className="flex items-center gap-4 mb-3">
-                <div className="bg-primary/20 p-3 rounded-lg border border-primary/40">
-                  <Users size={28} className="text-primary" />
+              <div className="flex items-center gap-3 mb-2">
+                <div className="bg-primary/20 p-2 rounded-lg border border-primary/40">
+                  <Users size={20} className="text-primary" />
                 </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">
                     Members
                   </h2>
-                  <p className="text-sm text-muted-foreground">View faction members</p>
+                  <p className="text-xs text-muted-foreground">View faction members</p>
                 </div>
               </div>
-              <div className="text-4xl font-bold text-primary mb-2">{memberCount}</div>
-              <p className="text-sm text-muted-foreground">Total members with participation stats</p>
-            </button>
+              <div className="text-3xl font-bold text-primary mb-1">{memberCount}</div>
+              <p className="text-xs text-muted-foreground">Total members with participation stats</p>
+            </Link>
 
             {/* Organized Crimes Card */}
-            <button
-              onClick={() => router.push("/dashboard/crimes")}
-              className="bg-card border border-border rounded-lg p-6 hover:border-accent transition-all text-left group"
+            <Link
+              href="/dashboard/crimes"
+              className="bg-card border border-border rounded-lg p-4 hover:border-accent transition-all text-left group cursor-pointer block"
             >
-              <div className="flex items-center gap-4 mb-3">
-                <div className="bg-accent/20 p-3 rounded-lg border border-accent/40">
-                  <Shield size={28} className="text-accent" />
+              <div className="flex items-center gap-3 mb-2">
+                <div className="bg-accent/20 p-2 rounded-lg border border-accent/40">
+                  <Shield size={20} className="text-accent" />
                 </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-foreground group-hover:text-accent transition-colors">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-lg font-bold text-foreground group-hover:text-accent transition-colors">
                     Organized Crimes
                   </h2>
-                  <p className="text-sm text-muted-foreground">Manage operations</p>
+                  <p className="text-xs text-muted-foreground">Manage operations</p>
                 </div>
               </div>
-              <div className="text-4xl font-bold text-accent mb-2">{crimes.length}</div>
-              <p className="text-sm text-muted-foreground">Active and completed crimes</p>
-            </button>
+              <div className="text-3xl font-bold text-accent mb-1">{crimes.length}</div>
+              <p className="text-xs text-muted-foreground">Active and completed crimes</p>
+            </Link>
+
+            {/* Armory Card */}
+            <Link
+              href="/dashboard/armory"
+              className="bg-card border border-border rounded-lg p-4 hover:border-orange-500 transition-all text-left group cursor-pointer block"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className="bg-orange-500/20 p-2 rounded-lg border border-orange-500/40">
+                  <Package size={20} className="text-orange-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-lg font-bold text-foreground group-hover:text-orange-500 transition-colors">
+                    Armory
+                  </h2>
+                  <p className="text-xs text-muted-foreground">View armory logs</p>
+                </div>
+              </div>
+              <div className="text-3xl font-bold text-orange-500 mb-1">
+                <Package size={32} />
+              </div>
+              <p className="text-xs text-muted-foreground">Historical armory activity</p>
+            </Link>
 
             {/* Reports Card */}
-            <button
-              onClick={() => router.push("/dashboard/reports")}
-              className="bg-card border border-border rounded-lg p-6 hover:border-cyan-500 transition-all text-left group"
+            <Link
+              href="/dashboard/reports"
+              className="bg-card border border-border rounded-lg p-4 hover:border-cyan-500 transition-all text-left group cursor-pointer block"
             >
-              <div className="flex items-center gap-4 mb-3">
-                <div className="bg-cyan-500/20 p-3 rounded-lg border border-cyan-500/40">
-                  <FileText size={28} className="text-cyan-500" />
+              <div className="flex items-center gap-3 mb-2">
+                <div className="bg-cyan-500/20 p-2 rounded-lg border border-cyan-500/40">
+                  <FileText size={20} className="text-cyan-500" />
                 </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-foreground group-hover:text-cyan-500 transition-colors">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-lg font-bold text-foreground group-hover:text-cyan-500 transition-colors">
                     Reports
                   </h2>
-                  <p className="text-sm text-muted-foreground">Historical data</p>
+                  <p className="text-xs text-muted-foreground">Historical data</p>
                 </div>
               </div>
-              <div className="text-4xl font-bold text-cyan-500 mb-2">
-                <FileText size={40} />
+              <div className="text-3xl font-bold text-cyan-500 mb-1">
+                <FileText size={32} />
               </div>
-              <p className="text-sm text-muted-foreground">Detailed crime reports</p>
-            </button>
+              <p className="text-xs text-muted-foreground">Detailed crime reports</p>
+            </Link>
           </div>
+
+          {/* Success Rate Charts */}
+          {crimes.length > 0 && <CrimeSuccessCharts crimes={crimes} />}
         </div>
       </main>
 

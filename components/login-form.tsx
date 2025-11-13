@@ -4,7 +4,7 @@ import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Toast } from "@/components/ui/toast"
+import { useToast } from "@/hooks/use-toast"
 
 interface LoginFormProps {
   onLogin?: (apiKey: string) => void
@@ -14,11 +14,10 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
   const router = useRouter()
   const [apiKey, setApiKey] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [toast, setToast] = useState<{ type: "error" | "success"; message: string } | null>(null)
+  const { toast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setToast(null)
     setIsLoading(true)
 
     try {
@@ -60,9 +59,9 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
       localStorage.setItem("factionId", factionId.toString())
       localStorage.setItem("factionName", basicData.basic?.name || "")
 
-      setToast({
-        type: "success",
-        message: `Authentication successful! Welcome, ${basicData.basic?.name || "Faction Member"}!`,
+      toast({
+        title: "Success",
+        description: `Authentication successful! Welcome, ${basicData.basic?.name || "Faction Member"}!`,
       })
       onLogin?.(apiKey)
 
@@ -71,47 +70,47 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
       }, 500)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to authenticate"
-      setToast({ type: "error", message: errorMessage })
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-2">Faction API Key</label>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="Enter your Torn API key"
-            className="w-full px-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-all"
-            required
-          />
-          <p className="text-center text-base text-muted-foreground mt-4">
-            <a
-              href="https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=TornOCApp&faction=members,basic,crime,crimes&torn=items"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline"
-            >
-              Create a Custom API Key
-            </a>
-          </p>
-        </div>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div>
+        <label className="block text-sm font-medium text-foreground mb-2">Faction API Key</label>
+        <input
+          type="password"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder="Enter your Torn API key"
+          className="w-full px-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+          required
+        />
+        <p className="text-center text-base text-muted-foreground mt-4">
+          <a
+            href="https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=TornOCApp&faction=armorynews,basic,crime,crimes,members&torn=items"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            Create a Custom API Key
+          </a>
+        </p>
+      </div>
 
-        <Button
-          type="submit"
-          disabled={isLoading || !apiKey}
-          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isLoading ? "Authenticating..." : "Access Dashboard"}
-        </Button>
-      </form>
-
-      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
-    </>
+      <Button
+        type="submit"
+        disabled={isLoading || !apiKey}
+        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isLoading ? "Authenticating..." : "Access Dashboard"}
+      </Button>
+    </form>
   )
 }
