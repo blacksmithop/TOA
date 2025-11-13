@@ -3,7 +3,17 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { RefreshCw, LogOut, MoreVertical, Info, Package, ChevronLeft, ChevronRight } from "lucide-react"
+import {
+  RefreshCw,
+  LogOut,
+  MoreVertical,
+  Info,
+  Package,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react"
 import { fetchAndCacheItems } from "@/lib/items-cache"
 import type { TornItem } from "@/lib/items-cache"
 import ItemModal from "@/components/item-modal"
@@ -50,6 +60,7 @@ interface GroupedLog {
   timestamp: number
   count: number
   crimeScenario?: ArmoryNewsItem["crimeScenario"]
+  originalLogs: ArmoryNewsItem[]
 }
 
 const ITEMS_PER_PAGE = 50
@@ -192,6 +203,7 @@ export default function ArmoryPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("All")
   const [itemsPerPage, setItemsPerPage] = useState(50)
   const [selectedItem, setSelectedItem] = useState<TornItem | null>(null)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const apiKey = localStorage.getItem("factionApiKey")
@@ -364,6 +376,7 @@ export default function ArmoryPage() {
 
     const grouped: GroupedLog[] = []
     let currentGroup: GroupedLog | null = null
+    let currentLogs: ArmoryNewsItem[] = []
 
     for (const log of logs) {
       const shouldGroup =
@@ -376,10 +389,13 @@ export default function ArmoryPage() {
       if (shouldGroup && currentGroup) {
         currentGroup.quantity += log.item.quantity
         currentGroup.count++
+        currentLogs.push(log)
       } else {
         if (currentGroup) {
+          currentGroup.originalLogs = currentLogs
           grouped.push(currentGroup)
         }
+        currentLogs = [log]
         currentGroup = {
           user: log.user,
           action: log.action,
@@ -391,11 +407,13 @@ export default function ArmoryPage() {
           timestamp: log.timestamp,
           count: 1,
           crimeScenario: log.crimeScenario,
+          originalLogs: [],
         }
       }
     }
 
     if (currentGroup) {
+      currentGroup.originalLogs = currentLogs
       grouped.push(currentGroup)
     }
 
@@ -460,6 +478,18 @@ export default function ArmoryPage() {
     if (action === "loaned" || action === "gave") return "to"
     if (action === "retrieved") return "from"
     return "to/from"
+  }
+
+  const toggleExpanded = (groupKey: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(groupKey)) {
+        next.delete(groupKey)
+      } else {
+        next.add(groupKey)
+      }
+      return next
+    })
   }
 
   return (
@@ -601,12 +631,13 @@ export default function ArmoryPage() {
               <div className="divide-y divide-border">
                 {paginatedNews.map((log, idx) => {
                   const item = getItemByName(log.item.name)
+                  const groupKey = `${log.user.id}-${log.timestamp}-${idx}`
+                  const isExpanded = expandedGroups.has(groupKey)
+                  const hasMultipleLogs = log.count > 1
+
                   return (
-                    <div
-                      key={`${log.user.id}-${log.timestamp}-${idx}`}
-                      className="p-4 hover:bg-accent/5 transition-colors"
-                    >
-                      <div className="flex items-start justify-between gap-4">
+                    <div key={groupKey} className="hover:bg-accent/5 transition-colors">
+                      <div className="p-4 flex items-start justify-between gap-4">
                         <div className="flex-1 flex items-start gap-3">
                           {/* Item thumbnail */}
                           {item && (
@@ -637,8 +668,14 @@ export default function ArmoryPage() {
                               <span className="text-foreground font-medium">
                                 {log.item.quantity > 1 ? `${log.item.quantity}x ` : ""}
                                 {log.item.name}
-                                {log.count > 1 && (
-                                  <span className="text-muted-foreground ml-1">({log.count} times)</span>
+                                {hasMultipleLogs && (
+                                  <button
+                                    onClick={() => toggleExpanded(groupKey)}
+                                    className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-1"
+                                  >
+                                    ({log.count} times)
+                                    {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                  </button>
                                 )}
                               </span>
                               {log.target && (
@@ -670,6 +707,50 @@ export default function ArmoryPage() {
                           {formatDate(log.timestamp)}
                         </div>
                       </div>
+
+                      {/* Expandable details section for grouped logs */}
+                      {hasMultipleLogs && isExpanded && (
+                        <div className="px-4 pb-4 pl-[4.5rem]">
+                          <div className="bg-accent/10 rounded-lg p-3 space-y-2 border border-border">
+                            <div className="text-sm font-medium text-muted-foreground mb-2">Individual Actions:</div>
+                            {log.originalLogs.map((originalLog, logIdx) => (
+                              <div
+                                key={`${originalLog.uuid}-${logIdx}`}
+                                className="text-sm flex items-center justify-between gap-4 py-1"
+                              >
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {originalLog.target ? (
+                                    <>
+                                      <span className="text-muted-foreground">
+                                        {getDirectionText(originalLog.action)}
+                                      </span>
+                                      <a
+                                        href={`https://www.torn.com/profiles.php?XID=${originalLog.target.id}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-primary hover:underline font-medium"
+                                      >
+                                        {originalLog.target.name}
+                                      </a>
+                                      {originalLog.item.quantity > 1 && (
+                                        <span className="text-muted-foreground">({originalLog.item.quantity}x)</span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span className="text-foreground">
+                                      {originalLog.item.quantity > 1 ? `${originalLog.item.quantity}x ` : ""}
+                                      {originalLog.item.name}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                  {formatDate(originalLog.timestamp)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )
                 })}
