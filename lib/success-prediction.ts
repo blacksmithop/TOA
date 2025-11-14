@@ -32,7 +32,7 @@ export async function getSuccessPrediction(
   parameters: number[]
 ): Promise<SuccessPrediction> {
   try {
-    const response = await fetch('/api/torn-probability/calculate-success', {
+    const response = await fetch('https://tornprobability.com:3000/api/CalculateSuccess', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

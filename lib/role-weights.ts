@@ -146,7 +146,7 @@ export async function getRoleWeights(): Promise<typeof STATIC_ROLE_WEIGHTS> {
   }
 
   try {
-    const response = await fetch('/api/torn-probability/role-weights', {
+    const response = await fetch('https://tornprobability.com:3000/api/GetRoleWeights', {
       signal: AbortSignal.timeout(5000) // 5 second timeout
     })
 
