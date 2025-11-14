@@ -43,6 +43,20 @@ export const API_SCOPES: ApiScope[] = [
     category: "faction",
   },
   {
+    id: "balance",
+    name: "balance",
+    description: "Member balance information",
+    required: false,
+    category: "faction",
+  },
+  {
+    id: "fundsnews",
+    name: "fundsnews",
+    description: "Fund transfer logs",
+    required: false,
+    category: "faction",
+  },
+  {
     id: "items",
     name: "items",
     description: "Item database for crime rewards",
@@ -94,4 +108,12 @@ export function canReloadIndividualCrimes(): boolean {
 
 export function canAccessArmory(): boolean {
   return hasScope("armorynews")
+}
+
+export function canAccessBalance(): boolean {
+  return hasScope("balance")
+}
+
+export function canAccessFunds(): boolean {
+  return hasScope("fundsnews")
 }

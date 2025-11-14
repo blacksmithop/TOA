@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from "@/hooks/use-toast"
-import { LogOut, MoreVertical, ArrowLeft, Info, RotateCcw } from "lucide-react"
+import { LogOut, MoreVertical, ArrowLeft, Info, RotateCcw } from 'lucide-react'
 import CrimesList from "@/components/crimes-list"
 import CrimeSummary from "@/components/crime-summary"
 import { fetchAndCacheItems } from "@/lib/items-cache"
@@ -70,6 +70,7 @@ export default function CrimesPage() {
   const [minPassRate, setMinPassRate] = useState(65)
   const [historicalCrimes, setHistoricalCrimes] = useState<Crime[]>([])
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
+  const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null)
   const historicalCrimesLengthRef = useRef(0)
 
   useEffect(() => {
@@ -119,9 +120,12 @@ export default function CrimesPage() {
     const memberParam = searchParams.get("member")
     console.log("[v0] Member param changed:", memberParam)
     if (memberParam) {
-      setFilteredMemberId(Number.parseInt(memberParam))
+      const memberId = Number.parseInt(memberParam)
+      setFilteredMemberId(memberId)
+      setSelectedMemberId(memberId)
     } else {
       setFilteredMemberId(null)
+      setSelectedMemberId(null)
     }
   }, [searchParams])
 
@@ -395,6 +399,27 @@ export default function CrimesPage() {
     ? crimes.filter((crime) => crime.slots.some((slot) => slot.user?.id === filteredMemberId))
     : crimes
 
+  const handleMemberFilterChange = (memberId: number | null) => {
+    setSelectedMemberId(memberId)
+    if (memberId) {
+      setFilteredMemberId(memberId)
+      router.push(`/dashboard/crimes?member=${memberId}`)
+    } else {
+      setFilteredMemberId(null)
+      router.push("/dashboard/crimes")
+    }
+  }
+
+  const handleClearFilter = () => {
+    setFilteredMemberId(null)
+    setSelectedMemberId(null)
+    router.replace("/dashboard/crimes")
+    toast({
+      title: "Success",
+      description: "Showing all crimes",
+    })
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -476,20 +501,31 @@ export default function CrimesPage() {
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-5xl mx-auto">
+          <div className="mb-4 flex items-center gap-2">
+            <select
+              value={selectedMemberId || ""}
+              onChange={(e) => handleMemberFilterChange(e.target.value ? Number.parseInt(e.target.value) : null)}
+              className="px-3 py-2 bg-card border-2 border-border rounded-lg text-foreground focus:border-primary focus:outline-none"
+            >
+              <option value="">All Members</option>
+              {members
+                .slice()
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+
           {filteredMemberId && (
             <div className="mb-4 p-3 bg-primary/10 border border-primary/30 rounded-lg flex items-center justify-between">
               <span className="text-sm text-foreground">
                 Showing crimes for: <strong>{members.find((m) => m.id === filteredMemberId)?.name}</strong>
               </span>
               <button
-                onClick={() => {
-                  setFilteredMemberId(null)
-                  router.push("/dashboard/crimes")
-                  toast({
-                    title: "Success",
-                    description: "Showing all crimes",
-                  })
-                }}
+                onClick={handleClearFilter}
                 className="text-xs px-2 py-1 bg-background text-foreground hover:text-foreground rounded border border-border hover:border-primary transition-colors"
               >
                 Clear Filter

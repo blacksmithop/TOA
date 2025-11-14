@@ -1,15 +1,16 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter } from 'next/navigation'
 import { useToast } from "@/hooks/use-toast"
-import { LogOut, MoreVertical, ArrowLeft, Info, RotateCcw } from "lucide-react"
+import { LogOut, MoreVertical, ArrowLeft, Info, RotateCcw } from 'lucide-react'
 import MemberList from "@/components/member-list"
 import { fetchAndCacheItems } from "@/lib/items-cache"
 import { handleApiError, validateApiResponse } from "@/lib/api-error-handler"
 import { ResetConfirmationDialog } from "@/components/reset-confirmation-dialog"
 import { clearAllCache } from "@/lib/cache-reset"
 import { handleFullLogout } from "@/lib/logout-handler"
+import { canAccessBalance } from "@/lib/api-scopes"
 
 interface Member {
   id: number
@@ -27,6 +28,7 @@ interface Member {
     timestamp: number
   }
   days_in_faction: number
+  money?: number
 }
 
 interface Crime {
@@ -59,6 +61,8 @@ export default function MembersPage() {
     levelRange: [1, 100],
   })
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
+  const [hasBalanceScope, setHasBalanceScope] = useState(false)
+  const [factionBalance, setFactionBalance] = useState<number | null>(null)
 
   useEffect(() => {
     const apiKey = localStorage.getItem("factionApiKey")
@@ -67,16 +71,46 @@ export default function MembersPage() {
       return
     }
 
+    const hasBalance = canAccessBalance()
+    setHasBalanceScope(hasBalance)
+
     loadHistoricalCrimes()
 
-    fetchData(apiKey)
+    fetchData(apiKey, hasBalance)
   }, [router])
 
-  const fetchData = async (apiKey: string) => {
+  const fetchData = async (apiKey: string, hasBalance?: boolean) => {
     setIsLoading(true)
+
+    const shouldFetchBalance = hasBalance !== undefined ? hasBalance : hasBalanceScope
 
     try {
       await fetchAndCacheItems(apiKey)
+
+      let balanceData: any = null
+      if (shouldFetchBalance) {
+        try {
+          console.log("[v0] Fetching faction balance...")
+          const balanceRes = await fetch("https://api.torn.com/v2/faction/balance", {
+            headers: { Authorization: `ApiKey ${apiKey}`, accept: "application/json" },
+          })
+
+          if (!balanceRes.ok) {
+            await handleApiError(balanceRes, "/faction/balance")
+          } else {
+            balanceData = await balanceRes.json()
+            validateApiResponse(balanceData, "/faction/balance")
+            if (balanceData?.balance?.total !== undefined) {
+              setFactionBalance(balanceData.balance.total)
+              console.log("[v0] Faction balance:", balanceData.balance.total)
+            }
+          }
+        } catch (err) {
+          console.error("[v0] Failed to fetch balance data:", err)
+        }
+      } else {
+        console.log("[v0] Balance scope not enabled, skipping faction balance fetch")
+      }
 
       const membersRes = await fetch("https://api.torn.com/v2/faction/members?striptags=true", {
         headers: { Authorization: `ApiKey ${apiKey}`, accept: "application/json" },
@@ -89,7 +123,17 @@ export default function MembersPage() {
       const membersData = await membersRes.json()
       validateApiResponse(membersData, "/faction/members")
 
-      setMembers(Object.values(membersData.members || {}))
+      const membersArray = Object.values(membersData.members || {})
+      if (balanceData?.balance?.members) {
+        balanceData.balance.members.forEach((balanceMember: { id: number; money: number }) => {
+          const member = membersArray.find((m: any) => m.id === balanceMember.id)
+          if (member) {
+            (member as any).money = balanceMember.money
+          }
+        })
+      }
+
+      setMembers(membersArray)
 
       const crimesRes = await fetch("https://api.torn.com/v2/faction/crimes?striptags=true", {
         headers: { Authorization: `ApiKey ${apiKey}`, accept: "application/json" },
@@ -305,6 +349,18 @@ export default function MembersPage() {
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-2xl mx-auto">
+          {hasBalanceScope && factionBalance !== null && (
+            <div className="bg-card border-2 border-border rounded-lg p-4 mb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-muted-foreground uppercase tracking-wide">Faction Balance</span>
+                </div>
+                <div className="text-2xl font-bold text-green-400">
+                  ${new Intl.NumberFormat().format(factionBalance)}
+                </div>
+              </div>
+            </div>
+          )}
           <MemberList
             members={members}
             crimes={activeRecruitingCrimes}

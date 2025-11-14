@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { Input } from "@/components/ui/input"
-import { Search, RotateCcw, Users, ChevronDown } from "lucide-react"
+import { Search, RotateCcw, Users, ChevronDown } from 'lucide-react'
 import { Slider } from "@/components/ui/slider"
 
 interface Member {
@@ -21,6 +21,7 @@ interface Member {
     timestamp: number
   }
   days_in_faction: number
+  money?: number
 }
 
 interface Crime {
@@ -426,7 +427,7 @@ export default function MemberList({
                         href={`https://www.torn.com/profiles.php?XID=${member.id}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-bold text-sm text-foreground leading-tight hover:text-accent hover:underline transition-colors block truncate"
+                        className="font-bold text-base text-foreground leading-tight hover:text-accent hover:underline transition-colors block truncate"
                       >
                         {member.name}
                       </a>
@@ -439,43 +440,31 @@ export default function MemberList({
                   </div>
                 </div>
 
-                <div className="text-xs text-muted-foreground space-y-0.5 mb-2">
-                  <div>{formatLastAction(member.last_action.timestamp)}</div>
-                  <div>{member.days_in_faction} days in faction</div>
-                </div>
-
-                <div className="flex flex-wrap gap-1.5">
-                  <span
-                    className={`text-xs px-2 py-1 rounded-md border-2 font-bold ${getStatusColor(member.status.color)}`}
-                  >
-                    {member.status.description}
-                  </span>
-                  {participatingMemberIds.has(member.id) && (
-                    <>
-                      <button
-                        onClick={() => {
-                          const crimeData = memberToCrimeMap[member.id]
-                          if (crimeData) {
-                            handleCrimeClick(crimeData.id, crimeData.name)
-                          }
-                        }}
-                        className="text-xs px-2 py-1 rounded-md bg-accent text-white border-2 border-accent font-bold hover:bg-accent/80 transition-all"
-                      >
-                        View
-                      </button>
-                      <button
-                        onClick={() => onFilterByCrime?.(member.id)}
-                        className="text-xs px-2 py-1 rounded-md bg-primary text-white border-2 border-primary font-bold hover:bg-primary/80 transition-all"
-                        title="Filter crimes"
-                      >
-                        Filter
-                      </button>
-                    </>
+                <div className="text-xs space-y-1 mb-2">
+                  <div className="text-muted-foreground">
+                    <span className="font-bold">Last seen:</span> {formatLastAction(member.last_action.timestamp)}
+                  </div>
+                  <div className="text-muted-foreground">
+                    <span className="font-bold">Days in Faction:</span> {member.days_in_faction}
+                  </div>
+                  {member.money !== undefined && (
+                    <div className="text-green-400 font-bold">
+                      <span className="text-muted-foreground font-bold">Balance:</span> {formatCurrency(member.money)}
+                    </div>
                   )}
                 </div>
 
+                <div className="mb-2">
+                  <span
+                    className={`text-xs px-2 py-1 rounded-md border font-bold inline-block ${getStatusColor(member.status.color)}`}
+                  >
+                    {member.status.description}
+                  </span>
+                </div>
+
                 {report && report.total > 0 && (
-                  <div className="mt-3 pt-3 border-t border-border/30 space-y-2">
+                  <div className="space-y-2">
+                    <div className="text-xs font-bold text-foreground">Crime Stats:</div>
                     <div className="flex flex-wrap gap-2">
                       {report.successful > 0 && (
                         <div className="bg-green-500/20 border border-green-500/30 rounded px-2 py-1 text-xs">
@@ -492,11 +481,6 @@ export default function MemberList({
                           <span className="text-blue-400 font-bold">Planning: {report.planning}</span>
                         </div>
                       )}
-                      {report.recruiting > 0 && (
-                        <div className="bg-purple-500/20 border border-purple-500/30 rounded px-2 py-1 text-xs">
-                          <span className="text-purple-400 font-bold">Recruiting: {report.recruiting}</span>
-                        </div>
-                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-xs">
@@ -510,9 +494,29 @@ export default function MemberList({
                       </div>
                     </div>
 
+                    {participatingMemberIds.has(member.id) && (
+                      <div className="flex gap-2 pt-2">
+                        <a
+                          href={`https://www.torn.com/factions.php?step=your&type=1#/tab=crimes&crimeId=${memberToCrimeMap[member.id].id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs px-3 py-1.5 rounded-md bg-accent text-white border border-accent font-bold hover:bg-accent/80 transition-all"
+                        >
+                          View
+                        </a>
+                        <button
+                          onClick={() => onFilterByCrime?.(member.id)}
+                          className="text-xs px-3 py-1.5 rounded-md bg-primary text-white border border-primary font-bold hover:bg-primary/80 transition-all"
+                          title="Filter crimes"
+                        >
+                          Filter
+                        </button>
+                      </div>
+                    )}
+
                     <button
                       onClick={() => toggleMemberReport(member.id)}
-                      className="w-full flex items-center justify-between hover:opacity-80 transition-opacity pt-1"
+                      className="w-full flex items-center justify-between hover:opacity-80 transition-opacity pt-2 border-t border-border/30"
                     >
                       <span className="text-xs font-bold text-foreground uppercase">
                         Report ({report.total} participations)
@@ -527,7 +531,6 @@ export default function MemberList({
                       <div className="mt-2 space-y-2 text-xs animate-in fade-in duration-200">
                         {Object.keys(report.crimesByType).length > 0 && (
                           <div className="space-y-1.5">
-                            <div className="text-xs font-bold text-foreground uppercase">Per Crime Breakdown</div>
                             {Object.entries(report.crimesByType)
                               .sort(([, a], [, b]) => b.total - a.total)
                               .map(([crimeName, stats]) => (

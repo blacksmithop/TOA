@@ -3,9 +3,10 @@
 import type React from "react"
 
 import { useMemo, useState, useEffect, useRef, useCallback } from "react"
-import { ChevronDown, ArrowUpDown, RefreshCw } from "lucide-react"
+import { ChevronDown, ArrowUpDown, RefreshCw, Microscope } from 'lucide-react'
 import ItemModal from "./item-modal"
 import { canReloadIndividualCrimes } from "@/lib/api-scopes"
+import { getSimulatorUrl, hasSimulator } from "@/lib/crime-simulator-urls"
 
 interface Slot {
   position: string
@@ -433,6 +434,8 @@ export default function CrimesList({
                   const totalSlots = crime.slots.length
                   const isReloading = reloadingCrimes.has(crime.id)
                   const canReload = !["Successful", "Failed", "Expired"].includes(crime.status)
+                  const simulatorUrl = getSimulatorUrl(crime.name)
+                  const showSimulator = ["Recruiting", "Planning"].includes(crime.status)
 
                   return (
                     <div
@@ -460,6 +463,25 @@ export default function CrimesList({
                               >
                                 <RefreshCw size={12} className={isReloading ? "animate-spin" : ""} />
                               </button>
+                            )}
+                            {showSimulator && (
+                              <a
+                                href={simulatorUrl || "#"}
+                                target={simulatorUrl ? "_blank" : undefined}
+                                rel={simulatorUrl ? "noopener noreferrer" : undefined}
+                                onClick={(e) => {
+                                  if (!simulatorUrl) e.preventDefault()
+                                }}
+                                title={simulatorUrl ? "Open simulator" : "Simulator not available"}
+                                className={`text-xs px-2 py-0.5 rounded border transition-colors flex items-center gap-1 ${
+                                  simulatorUrl
+                                    ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/40 hover:bg-yellow-500/30"
+                                    : "bg-gray-500/10 text-gray-500 border-gray-500/30 cursor-not-allowed opacity-50"
+                                }`}
+                              >
+                                <Microscope size={12} />
+                                Simulate
+                              </a>
                             )}
                           </div>
                           <div className="flex items-center gap-3 text-xs flex-wrap">
