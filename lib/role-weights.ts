@@ -167,7 +167,6 @@ export async function getRoleWeights(): Promise<typeof STATIC_ROLE_WEIGHTS> {
       
       cachedRoleWeights = normalized
       lastFetch = Date.now()
-      console.log('[v0] Fetched role weights from API')
       return normalized
     }
   } catch (error) {

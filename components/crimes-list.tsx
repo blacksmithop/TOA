@@ -3,11 +3,12 @@
 import type React from "react"
 
 import { useMemo, useState, useEffect, useRef, useCallback } from "react"
-import { ChevronDown, ArrowUpDown, RefreshCw, Microscope, AlertTriangle } from 'lucide-react'
+import { ChevronDown, ArrowUpDown, RefreshCw, Microscope, AlertTriangle, Sparkles } from 'lucide-react'
 import ItemModal from "./item-modal"
 import { canReloadIndividualCrimes } from "@/lib/api-scopes"
 import { getSimulatorUrl, hasSimulator } from "@/lib/crime-simulator-urls"
 import { getRoleWeights, getRoleWeight, getWeightColor, getWeightBgColor, shouldAlertLowCPR } from "@/lib/role-weights"
+import { getSuccessPrediction, SUPPORTED_SCENARIOS, type SuccessPrediction } from "@/lib/success-prediction"
 
 interface Slot {
   position: string
@@ -93,6 +94,8 @@ export default function CrimesList({
   const observerRef = useRef<{ [key: string]: IntersectionObserver | null }>({})
   const loadMoreRef = useRef<{ [key: string]: HTMLDivElement | null }>({})
   const [roleWeights, setRoleWeights] = useState<Awaited<ReturnType<typeof getRoleWeights>> | null>(null)
+  const [successPredictions, setSuccessPredictions] = useState<Map<number, SuccessPrediction>>(new Map())
+  const [loadingPredictions, setLoadingPredictions] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -108,6 +111,30 @@ export default function CrimesList({
   useEffect(() => {
     getRoleWeights().then(setRoleWeights)
   }, [])
+
+
+  const handlePredictClick = async (crime: Crime) => {
+    if (loadingPredictions.has(crime.id)) return
+
+    setLoadingPredictions(prev => new Set(prev).add(crime.id))
+
+    try {
+      const parameters = crime.slots.map(slot => slot.checkpoint_pass_rate || 0)
+      const prediction = await getSuccessPrediction(crime.name, parameters)
+      
+      setSuccessPredictions(prev => {
+        const next = new Map(prev)
+        next.set(crime.id, prediction)
+        return next
+      })
+    } finally {
+      setLoadingPredictions(prev => {
+        const next = new Set(prev)
+        next.delete(crime.id)
+        return next
+      })
+    }
+  }
 
   const memberMap = useMemo(() => {
     const map: { [key: number]: string } = {}
@@ -443,6 +470,11 @@ export default function CrimesList({
                   const simulatorUrl = getSimulatorUrl(crime.name)
                   const showSimulator = ["Recruiting", "Planning"].includes(crime.status)
                   const showRoleWeights = ["Recruiting", "Planning"].includes(crime.status) && roleWeights
+                  const prediction = successPredictions.get(crime.id)
+                  const showPredictButton = crime.status === 'Planning' && 
+                    SUPPORTED_SCENARIOS.includes(crime.name) &&
+                    crime.slots.every(slot => slot.user && slot.checkpoint_pass_rate !== undefined)
+                  const isPredicting = loadingPredictions.has(crime.id)
 
                   return (
                     <div
@@ -489,6 +521,33 @@ export default function CrimesList({
                                 <Microscope size={12} />
                                 Simulate
                               </a>
+                            )}
+                            {showPredictButton && (
+                              <button
+                                onClick={() => handlePredictClick(crime)}
+                                disabled={isPredicting}
+                                title="Get success prediction"
+                                className="text-xs px-2 py-0.5 rounded border transition-colors flex items-center gap-1 bg-purple-500/20 text-purple-400 border-purple-500/40 hover:bg-purple-500/30 disabled:opacity-50"
+                              >
+                                <Sparkles size={12} className={isPredicting ? "animate-pulse" : ""} />
+                                {isPredicting ? "Predicting..." : "Predict"}
+                              </button>
+                            )}
+                            {prediction && crime.status === 'Planning' && (
+                              <span
+                                className={`text-xs px-2 py-0.5 rounded border font-bold flex items-center gap-1 ${
+                                  prediction.supported
+                                    ? prediction.successChance >= 80
+                                      ? "bg-green-500/20 text-green-400 border-green-500/40"
+                                      : prediction.successChance >= 60
+                                      ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/40"
+                                      : "bg-red-500/20 text-red-400 border-red-500/40"
+                                    : "bg-gray-500/10 text-gray-500 border-gray-500/30"
+                                }`}
+                                title={prediction.supported ? "Predicted success chance" : "Prediction not supported for this scenario"}
+                              >
+                                {prediction.supported ? `${prediction.successChance.toFixed(2)}%` : "N/A"}
+                              </span>
                             )}
                           </div>
                           <div className="flex items-center gap-3 text-xs flex-wrap">
