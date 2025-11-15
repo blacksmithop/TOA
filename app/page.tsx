@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter } from 'next/navigation'
+import Link from "next/link"
 import LoginForm from "@/components/login-form"
 
 export default function Home() {
@@ -35,15 +36,25 @@ export default function Home() {
         </div>
         <LoginForm onLogin={() => setIsLoggedIn(true)} />
       </div>
-      <footer className="w-full text-center py-4 text-sm">
-        <a
-          href="https://www.torn.com/profiles.php?XID=1712955"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-white hover:text-white/80 transition-colors"
-        >
-          © oxiblurr [1712955]
-        </a>
+      <footer className="w-full text-center py-4 text-sm space-y-2">
+        <div>
+          <Link
+            href="/dashboard/credits"
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Credits
+          </Link>
+        </div>
+        <div>
+          <a
+            href="https://www.torn.com/profiles.php?XID=1712955"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white hover:text-white/80 transition-colors"
+          >
+            © oxiblurr [1712955]
+          </a>
+        </div>
       </footer>
     </main>
   )

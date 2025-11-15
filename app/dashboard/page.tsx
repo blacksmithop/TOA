@@ -574,6 +574,10 @@ export default function Dashboard() {
           >
             © oxiblurr [1712955]
           </a>
+          <span className="mx-2 text-muted-foreground">•</span>
+          <Link href="/dashboard/credits" className="text-white hover:text-white/80 transition-colors">
+            Credits
+          </Link>
         </div>
       </footer>
     </div>
