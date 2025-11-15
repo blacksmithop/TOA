@@ -1,20 +1,9 @@
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter } from 'next/navigation'
 import { useToast } from "@/hooks/use-toast"
-import {
-  RefreshCw,
-  LogOut,
-  MoreVertical,
-  Info,
-  Play,
-  Loader2,
-  ChevronDown,
-  ArrowLeft,
-  ArrowUp,
-  ArrowDown,
-} from "lucide-react"
+import { RefreshCw, LogOut, MoreVertical, Info, Play, Loader2, ChevronDown, ArrowLeft, ArrowUp, ArrowDown } from 'lucide-react'
 import { fetchAndCacheItems } from "@/lib/items-cache"
 import type { TornItem } from "@/lib/items-cache"
 import { VictoryPie } from "victory"
@@ -58,6 +47,8 @@ export default function ReportsPage() {
   const [difficultyFilter, setDifficultyFilter] = useState<string>("All")
   const [sortBy, setSortBy] = useState<string>("Total")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+  const [dateFilter, setDateFilter] = useState<number>(0) // 0 = All, 7, 14, 30, 90 days
+  // </CHANGE>
 
   const WEEK_IN_SECONDS = 7 * 24 * 60 * 60
   const REQUEST_DELAY = 2000
@@ -73,8 +64,17 @@ export default function ReportsPage() {
       crimeMap.set(crime.id, crime)
     })
 
-    return Array.from(crimeMap.values())
-  }, [historicalCrimes, currentCrimes])
+    let filteredCrimes = Array.from(crimeMap.values())
+    
+    if (dateFilter > 0) {
+      const now = Math.floor(Date.now() / 1000)
+      const cutoffTime = now - (dateFilter * 24 * 60 * 60)
+      filteredCrimes = filteredCrimes.filter(crime => crime.executed_at >= cutoffTime)
+    }
+
+    return filteredCrimes
+    // </CHANGE>
+  }, [historicalCrimes, currentCrimes, dateFilter])
 
   useEffect(() => {
     const apiKey = localStorage.getItem("factionApiKey")
@@ -454,7 +454,7 @@ export default function ReportsPage() {
               <button onClick={() => router.push("/dashboard")} className="hover:opacity-80 transition-opacity">
                 <h1 className="text-3xl font-bold text-foreground">Crime Reports</h1>
               </button>
-              <p className="text-muted-foreground mt-1">Detailed historical crime data</p>
+              <p className="text-sm text-muted-foreground mt-1">Detailed historical crime data</p>
             </div>
           </div>
           <div className="relative">
@@ -637,6 +637,23 @@ export default function ReportsPage() {
                       <option value="Expert (9-10)">Expert (9-10)</option>
                     </select>
                   </div>
+
+                  {/* Add date filter dropdown */}
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1.5 block">Filter by Date</label>
+                    <select
+                      value={dateFilter}
+                      onChange={(e) => setDateFilter(Number(e.target.value))}
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="0">All</option>
+                      <option value="7">7 Days</option>
+                      <option value="14">14 Days</option>
+                      <option value="30">30 Days</option>
+                      <option value="90">90 Days</option>
+                    </select>
+                  </div>
+                  {/* </CHANGE> */}
                 </div>
 
                 {crimeStats.map((crime) => {
@@ -689,6 +706,14 @@ export default function ReportsPage() {
                     colors.push("#6b7280")
                   }
 
+                  const crimeInstances = crimes.filter((c) => c.name === crime.name && c.status === "Successful")
+                  const totalMoney = crimeInstances.reduce(
+                    (sum, c) => sum + (c.rewards?.money || 0),
+                    0,
+                  )
+                  const avgMoney = crimeInstances.length > 0 ? totalMoney / crimeInstances.length : 0
+                  // </CHANGE>
+
                   return (
                     <div key={crime.name} className="bg-card border border-border/50 rounded-lg overflow-hidden">
                       <button
@@ -729,6 +754,17 @@ export default function ReportsPage() {
 
                       {isExpanded && pieData.length > 0 && (
                         <div className="p-6 border-t border-border/50 animate-in fade-in duration-200">
+                          <div className="mb-6 grid grid-cols-2 gap-4">
+                            <div className="bg-background rounded-lg p-4 border border-border">
+                              <div className="text-xs text-muted-foreground mb-1">Total Money</div>
+                              <div className="text-xl font-bold text-green-400">{formatCurrency(totalMoney)}</div>
+                            </div>
+                            <div className="bg-background rounded-lg p-4 border border-border">
+                              <div className="text-xs text-muted-foreground mb-1">Average Money</div>
+                              <div className="text-xl font-bold text-green-400">{formatCurrency(Math.round(avgMoney))}</div>
+                            </div>
+                          </div>
+                          {/* </CHANGE> */}
                           <div className="flex justify-center">
                             <svg width={300} height={300} style={{ overflow: "visible" }}>
                               <VictoryPie
