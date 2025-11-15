@@ -9,6 +9,7 @@ import { canReloadIndividualCrimes } from "@/lib/api-scopes"
 import { getSimulatorUrl, hasSimulator } from "@/lib/crime-simulator-urls"
 import { getRoleWeights, getRoleWeight, getWeightColor, getWeightBgColor, shouldAlertLowCPR } from "@/lib/role-weights"
 import { getSuccessPrediction, SUPPORTED_SCENARIOS, type SuccessPrediction } from "@/lib/success-prediction"
+import { getItemMarketPrice } from "@/lib/marketplace-price"
 
 interface Slot {
   position: string
@@ -96,6 +97,9 @@ export default function CrimesList({
   const [roleWeights, setRoleWeights] = useState<Awaited<ReturnType<typeof getRoleWeights>> | null>(null)
   const [successPredictions, setSuccessPredictions] = useState<Map<number, SuccessPrediction>>(new Map())
   const [loadingPredictions, setLoadingPredictions] = useState<Set<number>>(new Set())
+  const [itemPrices, setItemPrices] = useState<Map<number, number | null>>(new Map())
+  const [loadingPrices, setLoadingPrices] = useState<Set<number>>(new Set())
+
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -136,6 +140,28 @@ export default function CrimesList({
     }
   }
 
+  const fetchItemPrice = async (itemId: number) => {
+    if (loadingPrices.has(itemId) || itemPrices.has(itemId)) return
+
+    setLoadingPrices(prev => new Set(prev).add(itemId))
+
+    try {
+      const price = await getItemMarketPrice(itemId)
+      setItemPrices(prev => {
+        const next = new Map(prev)
+        next.set(itemId, price)
+        return next
+      })
+    } finally {
+      setLoadingPrices(prev => {
+        const next = new Set(prev)
+        next.delete(itemId)
+        return next
+      })
+    }
+  }
+
+
   const memberMap = useMemo(() => {
     const map: { [key: number]: string } = {}
     members.forEach((member) => {
@@ -160,10 +186,20 @@ export default function CrimesList({
       Expired: [],
     }
 
+    const originalCounts: { [key: string]: number } = {
+      Recruiting: 0,
+      Planning: 0,
+      Ongoing: 0,
+      Successful: 0,
+      Failed: 0,
+      Expired: 0,
+    }
+
     crimes.forEach((crime) => {
       const status = crime.status === "Failure" ? "Failed" : crime.status
       if (groups[status]) {
         groups[status].push(crime)
+        originalCounts[status]++
       }
     })
 
@@ -191,13 +227,13 @@ export default function CrimesList({
       }
     })
 
-    return groups
+    return { groups, originalCounts }
   }, [crimes, sortBy, filterAtRisk])
 
   useEffect(() => {
     const initialVisible: { [key: string]: number } = {}
-    Object.keys(crimesGrouped).forEach((status) => {
-      initialVisible[status] = Math.min(20, crimesGrouped[status].length)
+    Object.keys(crimesGrouped.groups).forEach((status) => {
+      initialVisible[status] = Math.min(20, crimesGrouped.groups[status].length)
     })
     setVisibleCrimes(initialVisible)
   }, [crimesGrouped])
@@ -213,7 +249,7 @@ export default function CrimesList({
           if (entries[0].isIntersecting) {
             setVisibleCrimes((prev) => {
               const currentVisible = prev[status] || 20
-              const totalCrimes = crimesGrouped[status]?.length || 0
+              const totalCrimes = crimesGrouped.groups[status]?.length || 0
               return {
                 ...prev,
                 [status]: Math.min(currentVisible + 20, totalCrimes),
@@ -354,7 +390,7 @@ export default function CrimesList({
     return `${day}-${month}-${year} ${hours}:${minutes}`
   }
 
-  const renderCrimeGroup = (status: string, crimes: Crime[]) => {
+  const renderCrimeGroup = (status: string, crimes: Crime[], originalCount: number) => {
     const isExpanded = !collapsedStatus.has(status)
     const currentSort = sortBy[status] || "none"
     const isFilteringAtRisk = filterAtRisk[status] || false
@@ -402,7 +438,7 @@ export default function CrimesList({
 
         {isExpanded && (
           <div className="mt-2 space-y-2 animate-in fade-in duration-200">
-            {crimes.length > 0 && (
+            {originalCount > 0 && (
               <div className="flex items-center gap-2 px-3 py-2 bg-card rounded-lg border">
                 <span className="text-xs text-foreground font-bold uppercase">Sort:</span>
                 <button
@@ -666,32 +702,47 @@ export default function CrimesList({
                               <p className="text-xs font-bold text-green-400 mb-0.5 uppercase">Items</p>
                               <table className="text-xs">
                                 <tbody>
-                                  {crime.rewards.items.map((rewardItem, itemIdx) => (
-                                    <tr key={itemIdx}>
-                                      <td className="py-0.5 pr-4">
-                                        <div className="flex items-center gap-2">
-                                          {items.has(rewardItem.id) && (
-                                            <button
-                                              onClick={() => setSelectedItem(items.get(rewardItem.id))}
-                                              className="hover:opacity-80 shrink-0"
-                                            >
-                                              <img
-                                                src={items.get(rewardItem.id)?.image || "/placeholder.svg"}
-                                                alt={items.get(rewardItem.id)?.name}
-                                                className="w-6 h-6 rounded"
-                                              />
-                                            </button>
-                                          )}
-                                          <span className="font-bold text-foreground whitespace-nowrap">
-                                            {items.has(rewardItem.id)
-                                              ? items.get(rewardItem.id)?.name
-                                              : `Item ${rewardItem.id}`}
-                                          </span>
-                                        </div>
-                                      </td>
-                                      <td className="font-bold text-foreground text-right py-0.5">x{rewardItem.quantity}</td>
-                                    </tr>
-                                  ))}
+                                  {crime.rewards.items.map((rewardItem, itemIdx) => {
+                                    const isCustomMoney = crime.rewards && (crime.rewards.money === 0 && (crime.rewards.items.length > 0 || crime.rewards.payout?.type === "Inventory"))
+                                    const itemPrice = itemPrices.get(rewardItem.id)
+                                    const isPriceLoading = loadingPrices.has(rewardItem.id)
+                                    
+                                    if (isCustomMoney && !itemPrice && !isPriceLoading && !itemPrices.has(rewardItem.id)) {
+                                      fetchItemPrice(rewardItem.id)
+                                    }
+
+                                    return (
+                                      <tr key={itemIdx}>
+                                        <td className="py-0.5 pr-4">
+                                          <div className="flex items-center gap-2">
+                                            {items.has(rewardItem.id) && (
+                                              <button
+                                                onClick={() => setSelectedItem(items.get(rewardItem.id))}
+                                                className="hover:opacity-80 shrink-0"
+                                              >
+                                                <img
+                                                  src={items.get(rewardItem.id)?.image || "/placeholder.svg"}
+                                                  alt={items.get(rewardItem.id)?.name}
+                                                  className="w-6 h-6 rounded"
+                                                />
+                                              </button>
+                                            )}
+                                            <span className="font-bold text-foreground whitespace-nowrap">
+                                              {items.has(rewardItem.id)
+                                                ? items.get(rewardItem.id)?.name
+                                                : `Item ${rewardItem.id}`}
+                                            </span>
+                                          </div>
+                                        </td>
+                                        <td className="font-bold text-foreground text-right py-0.5">x{rewardItem.quantity}</td>
+                                        {isCustomMoney && itemPrice !== null && itemPrice !== undefined && (
+                                          <td className="text-xs text-muted-foreground text-right py-0.5 pl-2">
+                                            Worth: ${(itemPrice * rewardItem.quantity).toLocaleString()}
+                                          </td>
+                                        )}
+                                      </tr>
+                                    )
+                                  })}
                                 </tbody>
                               </table>
                             </div>
@@ -899,8 +950,8 @@ export default function CrimesList({
   return (
     <div className="space-y-2">
       <ItemModal item={selectedItem} onClose={() => setSelectedItem(null)} />
-      {Object.entries(crimesGrouped).map(([status, crimes]) => {
-        return renderCrimeGroup(status, crimes)
+      {Object.entries(crimesGrouped.groups).map(([status, crimes]) => {
+        return renderCrimeGroup(status, crimes, crimesGrouped.originalCounts[status])
       })}
     </div>
   )

@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { ChevronDown } from "lucide-react"
+import { ChevronDown } from 'lucide-react'
 import ItemModal from "./item-modal"
 
 interface Crime {
@@ -15,14 +15,21 @@ interface Crime {
   }
 }
 
+interface Member {
+  id: number
+  name: string
+  position: string
+}
+
 interface CrimeSummaryProps {
   crimes: Crime[]
   items: Map<number, any>
   minPassRate?: number
   onMinPassRateChange?: (value: number) => void
+  membersNotInOC?: Member[]
 }
 
-export default function CrimeSummary({ crimes, items, minPassRate, onMinPassRateChange }: CrimeSummaryProps) {
+export default function CrimeSummary({ crimes, items, minPassRate, onMinPassRateChange, membersNotInOC }: CrimeSummaryProps) {
   const [isItemsExpanded, setIsItemsExpanded] = useState(false)
   const [selectedItem, setSelectedItem] = useState<any>(null)
 
@@ -207,6 +214,28 @@ export default function CrimeSummary({ crimes, items, minPassRate, onMinPassRate
               />
               <span className="text-sm text-muted-foreground">%</span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {membersNotInOC && membersNotInOC.length > 0 && (
+        <div className="bg-card p-3 rounded-lg border border-border/50">
+          <h3 className="text-xs text-muted-foreground font-bold mb-2">
+            Not in OC ({membersNotInOC.length})
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {membersNotInOC.map((member) => (
+              <a
+                key={member.id}
+                href={`https://www.torn.com/profiles.php?XID=${member.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2 py-1 text-xs bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded transition-colors"
+                title={`${member.name} - ${member.position}`}
+              >
+                {member.name}
+              </a>
+            ))}
           </div>
         </div>
       )}

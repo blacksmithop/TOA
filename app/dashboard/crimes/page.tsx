@@ -502,7 +502,8 @@ export default function CrimesPage() {
       if (membersInCrimes.has(member.id)) return false
       
       return true
-    }).sort((a, b) => a.name.localeCompare(b.name))
+    })
+    .sort((a, b) => b.last_action.timestamp - a.last_action.timestamp)
   }, [members, crimes])
 
   if (isLoading) {
@@ -636,33 +637,12 @@ export default function CrimesPage() {
             </div>
           )}
           
-          {membersNotInOC.length > 0 && (
-            <div className="mb-4 bg-card border border-border rounded-lg p-4">
-              <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wide mb-2">
-                Not in OC ({membersNotInOC.length})
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {membersNotInOC.map((member) => (
-                  <a
-                    key={member.id}
-                    href={`https://www.torn.com/profiles.php?XID=${member.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-2 py-1 text-xs bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded transition-colors"
-                    title={`${member.name} - ${member.position}`}
-                  >
-                    {member.name}
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-          
           <CrimeSummary
             crimes={dateFilteredCrimes}
             items={items}
             minPassRate={minPassRate}
             onMinPassRateChange={setMinPassRate}
+            membersNotInOC={membersNotInOC}
           />
           <CrimesList
             crimes={dateFilteredCrimes}
