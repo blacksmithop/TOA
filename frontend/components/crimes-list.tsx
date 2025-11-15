@@ -13,7 +13,7 @@ import { getItemMarketPrice } from "@/lib/marketplace-price"
 import type { Crime, Slot, Rewards, Member } from "@/types/crime"
 import { formatDate, formatTime, formatDateTime } from "@/lib/crime-formatters"
 import { getDifficultyColor, getPassRateColor, getStatusColor, getHeaderColor, getPositionPassRateColor } from "@/lib/crime-colors"
-import { CRIME_STATUSES } from "@/constants/crime-statuses"
+import { STATUS_ORDER } from "@/constants/crime-statuses"
 
 interface CrimesListProps {
   crimes: Crime[]
@@ -35,7 +35,7 @@ export default function CrimesList({
   factionId,
 }: CrimesListProps) {
   const [collapsedStatus, setCollapsedStatus] = useState<Set<string>>(
-    new Set(CRIME_STATUSES),
+    new Set(STATUS_ORDER),
   )
   const [selectedItem, setSelectedItem] = useState<any>(null)
   const [sortBy, setSortBy] = useState<{ [key: string]: "difficulty" | "filled" | "timeLeft" | "none" }>({})
@@ -132,7 +132,7 @@ export default function CrimesList({
     const groups: { [key: string]: Crime[] } = {}
     const originalCounts: { [key: string]: number } = {}
     
-    CRIME_STATUSES.forEach(status => {
+    STATUS_ORDER.forEach(status => {
       groups[status] = []
       originalCounts[status] = 0
     })
@@ -828,8 +828,10 @@ export default function CrimesList({
   return (
     <div className="space-y-2">
       <ItemModal item={selectedItem} onClose={() => setSelectedItem(null)} />
-      {Object.entries(crimesGrouped.groups).map(([status, crimes]) => {
-        return renderCrimeGroup(status, crimes, crimesGrouped.originalCounts[status])
+      {STATUS_ORDER.map((status) => {
+        const crimesForStatus = crimesGrouped.groups[status] || []
+        const originalCountForStatus = crimesGrouped.originalCounts[status] || 0
+        return renderCrimeGroup(status, crimesForStatus, originalCountForStatus)
       })}
     </div>
   )
