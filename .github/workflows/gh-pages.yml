@@ -5,7 +5,9 @@ on:
     branches: [ main ]
     paths:
       - '**'
-      - '.github/workflows/gh-pages.yml'
+      - '!Readme.md'
+      - '!proxy/**'
+      - '!docs/**'
   workflow_dispatch:
 
 permissions:
@@ -27,8 +29,6 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          # Optional: only if you have package-lock.json in root
-          # cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: |
@@ -50,7 +50,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: out  # Assumes `next export` outputs to ./out
+          path: out
 
       - name: Deploy to GitHub Pages
         id: deployment
