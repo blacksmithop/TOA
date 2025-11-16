@@ -11,6 +11,8 @@ import { ResetConfirmationDialog } from "@/components/reset-confirmation-dialog"
 import { clearAllCache } from "@/lib/cache-reset"
 import { handleFullLogout } from "@/lib/logout-handler"
 import { canAccessBalance } from "@/lib/api-scopes"
+import { fetchFFScouterStats } from "@/lib/ffscouter"
+import { fetchYataMembers, YataMemberData } from "@/lib/yata"
 
 interface Member {
   id: number
@@ -29,6 +31,9 @@ interface Member {
   }
   days_in_faction: number
   money?: number
+  bs_estimate_human?: string | null
+  crimes_rank?: number
+  nnb?: number
 }
 
 interface Crime {
@@ -132,6 +137,25 @@ export default function MembersPage() {
           }
         })
       }
+
+      const memberIds = membersArray.map((m: any) => m.id)
+      const ffScouterData = await fetchFFScouterStats(memberIds)
+      
+      membersArray.forEach((member: any) => {
+        const statData = ffScouterData.get(member.id)
+        if (statData && statData.bs_estimate_human) {
+          member.bs_estimate_human = statData.bs_estimate_human
+        }
+      })
+
+      const yataData = await fetchYataMembers(apiKey)
+      membersArray.forEach((member: any) => {
+        const yataMember = yataData.get(member.id)
+        if (yataMember) {
+          member.crimes_rank = yataMember.crimes_rank
+          member.nnb = yataMember.nnb
+        }
+      })
 
       setMembers(membersArray)
 

@@ -1,0 +1,332 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { useRouter } from 'next/navigation'
+import { ArrowLeft, Save } from 'lucide-react'
+import { useToast } from "@/hooks/use-toast"
+
+interface ThirdPartySettings {
+  tornProbability: boolean
+  crimesHub: boolean
+  ffScouter: {
+    enabled: boolean
+    apiKey: string
+  }
+  tornStats: {
+    enabled: boolean
+    apiKey: string
+  }
+  yata: {
+    enabled: boolean
+  }
+}
+
+export default function SettingsPage() {
+  const router = useRouter()
+  const { toast } = useToast()
+  const [settings, setSettings] = useState<ThirdPartySettings>({
+    tornProbability: true,
+    crimesHub: true,
+    ffScouter: {
+      enabled: false,
+      apiKey: "",
+    },
+    tornStats: {
+      enabled: false,
+      apiKey: "",
+    },
+    yata: {
+      enabled: false,
+    },
+  })
+
+  useEffect(() => {
+    const apiKey = localStorage.getItem("factionApiKey")
+    if (!apiKey) {
+      router.push("/")
+      return
+    }
+
+    // Load settings from localStorage
+    const savedSettings = localStorage.getItem("thirdPartySettings")
+    if (savedSettings) {
+      try {
+        setSettings(JSON.parse(savedSettings))
+      } catch (err) {
+        console.error("Error loading settings:", err)
+      }
+    }
+
+    // Load individual API keys if they exist
+    const ffScouterKey = localStorage.getItem("FFSCOUTER_API_KEY")
+    const tornStatsKey = localStorage.getItem("TORNSTATS_API_KEY")
+
+    if (ffScouterKey || tornStatsKey) {
+      setSettings((prev) => ({
+        ...prev,
+        ffScouter: {
+          enabled: prev.ffScouter.enabled,
+          apiKey: ffScouterKey || prev.ffScouter.apiKey,
+        },
+        tornStats: {
+          enabled: prev.tornStats.enabled,
+          apiKey: tornStatsKey || prev.tornStats.apiKey,
+        },
+      }))
+    }
+  }, [router])
+
+  const handleSave = () => {
+    // Save settings to localStorage
+    localStorage.setItem("thirdPartySettings", JSON.stringify(settings))
+
+    // Save individual API keys
+    if (settings.ffScouter.enabled && settings.ffScouter.apiKey) {
+      localStorage.setItem("FFSCOUTER_API_KEY", settings.ffScouter.apiKey)
+    } else {
+      localStorage.removeItem("FFSCOUTER_API_KEY")
+    }
+
+    if (settings.tornStats.enabled && settings.tornStats.apiKey) {
+      localStorage.setItem("TORNSTATS_API_KEY", settings.tornStats.apiKey)
+    } else {
+      localStorage.removeItem("TORNSTATS_API_KEY")
+    }
+
+    toast({
+      title: "Success",
+      description: "Settings saved successfully",
+    })
+  }
+
+  return (
+    <div className="flex flex-col h-screen bg-background overflow-hidden">
+      <header className="flex-shrink-0 border-b border-border bg-card p-6">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="p-2 hover:bg-accent rounded-lg transition-colors border border-border"
+            title="Back to Dashboard"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Settings</h1>
+            <p className="text-muted-foreground mt-1">Configure third-party integrations</p>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-3xl mx-auto space-y-6">
+          <div className="bg-card border border-border rounded-lg p-6">
+            <h2 className="text-xl font-bold text-foreground mb-4">Third Party Apps</h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              Configure external API integrations to enhance functionality
+            </p>
+
+            <div className="space-y-6">
+              {/* Torn Probability API */}
+              <div className="border border-border rounded-lg p-4 bg-card/50">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-semibold text-foreground">Torn Probability API</h3>
+                      <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded">Required</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Fetches OC role weights and overall success %
+                    </p>
+                    <a
+                      href="https://tornprobability.com:3000"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                    >
+                      https://tornprobability.com:3000
+                    </a>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={settings.tornProbability}
+                    disabled
+                    className="mt-1 h-5 w-5 rounded border-border bg-muted cursor-not-allowed opacity-50"
+                  />
+                </div>
+              </div>
+
+              {/* CrimesHub */}
+              <div className="border border-border rounded-lg p-4 bg-card/50">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-semibold text-foreground">CrimesHub</h3>
+                      <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded">Required</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">Simulate CPR impact on OC outcome</p>
+                    <a
+                      href="https://crimeshub-2b4b0.firebaseapp.com/home"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                    >
+                      https://crimeshub-2b4b0.firebaseapp.com/home
+                    </a>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={settings.crimesHub}
+                    disabled
+                    className="mt-1 h-5 w-5 rounded border-border bg-muted cursor-not-allowed opacity-50"
+                  />
+                </div>
+              </div>
+
+              {/* FF Scouter */}
+              <div className="border border-border rounded-lg p-4 bg-card/50">
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-semibold text-foreground">FF Scouter</h3>
+                      <span className="text-xs bg-accent/20 text-accent px-2 py-1 rounded">Optional</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">Fetch battle stat estimates</p>
+                    <a
+                      href="https://ffscouter.com/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                    >
+                      https://ffscouter.com/
+                    </a>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={settings.ffScouter.enabled}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        ffScouter: { ...prev.ffScouter, enabled: e.target.checked },
+                      }))
+                    }
+                    className="mt-1 h-5 w-5 rounded border-border bg-background cursor-pointer"
+                  />
+                </div>
+                {settings.ffScouter.enabled && (
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <label className="block text-sm font-medium text-foreground mb-2">API Key</label>
+                    <input
+                      type="password"
+                      value={settings.ffScouter.apiKey}
+                      onChange={(e) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          ffScouter: { ...prev.ffScouter, apiKey: e.target.value },
+                        }))
+                      }
+                      placeholder="Enter FF Scouter API key"
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* TornStats */}
+              <div className="border border-border rounded-lg p-4 bg-card/50">
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-semibold text-foreground">TornStats</h3>
+                      <span className="text-xs bg-accent/20 text-accent px-2 py-1 rounded">Optional</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">Fetch CPR information</p>
+                    <a
+                      href="https://www.tornstats.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                    >
+                      https://www.tornstats.com
+                    </a>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={settings.tornStats.enabled}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        tornStats: { ...prev.tornStats, enabled: e.target.checked },
+                      }))
+                    }
+                    className="mt-1 h-5 w-5 rounded border-border bg-background cursor-pointer"
+                  />
+                </div>
+                {settings.tornStats.enabled && (
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <label className="block text-sm font-medium text-foreground mb-2">API Key</label>
+                    <input
+                      type="password"
+                      value={settings.tornStats.apiKey}
+                      onChange={(e) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          tornStats: { ...prev.tornStats, apiKey: e.target.value },
+                        }))
+                      }
+                      placeholder="Enter TornStats API key"
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Yata */}
+              <div className="border border-border rounded-lg p-4 bg-card/50">
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-semibold text-foreground">Yata</h3>
+                      <span className="text-xs bg-accent/20 text-accent px-2 py-1 rounded">Optional</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Fetch faction member information (uses main Torn API key)
+                    </p>
+                    <a
+                      href="https://yata.yt"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                    >
+                      https://yata.yt
+                    </a>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={settings.yata.enabled}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        yata: { ...prev.yata, enabled: e.target.checked },
+                      }))
+                    }
+                    className="mt-1 h-5 w-5 rounded border-border bg-background cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-border">
+              <button
+                onClick={handleSave}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-semibold"
+              >
+                <Save size={18} />
+                Save Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}

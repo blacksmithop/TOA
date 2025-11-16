@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react"
 import { useRouter } from 'next/navigation'
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { RefreshCw, LogOut, MoreVertical, Users, Shield, Info, FileText, Package, RotateCcw, DollarSign } from 'lucide-react'
+import { RefreshCw, LogOut, MoreVertical, Users, Shield, Info, FileText, Package, RotateCcw, DollarSign, Settings } from 'lucide-react'
 import { fetchAndCacheItems } from "@/lib/items-cache"
 import type { TornItem } from "@/lib/items-cache"
 import CrimeSummary from "@/components/crime-summary"
@@ -324,6 +324,16 @@ export default function Dashboard() {
                   >
                     <Info size={18} />
                     Faction
+                  </button>
+                  <button
+                    onClick={() => {
+                      router.push("/dashboard/settings")
+                      setDropdownOpen(false)
+                    }}
+                    className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-accent transition-colors border-t border-border"
+                  >
+                    <Settings size={18} />
+                    Settings
                   </button>
                   <button
                     onClick={() => {

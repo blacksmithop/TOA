@@ -22,6 +22,9 @@ interface Member {
   }
   days_in_faction: number
   money?: number
+  bs_estimate_human?: string | null
+  crimes_rank?: number
+  nnb?: number
 }
 
 interface Crime {
@@ -65,6 +68,7 @@ export default function MemberList({
   const [searchQuery, setSearchQuery] = useState("")
   const [filtersCollapsed, setFiltersCollapsed] = useState(true)
   const [collapsedMembers, setCollapsedMembers] = useState<Set<number>>(new Set(members.map((m) => m.id)))
+  const [sortBy, setSortBy] = useState<"none" | "crime_rank" | "nnb">("none")
 
   const participatingMemberIds = new Set<number>()
   const memberToCrimeMap: { [key: number]: { id: number; name: string } } = {}
@@ -121,7 +125,19 @@ export default function MemberList({
   })
 
   const sortedMembers = useMemo(() => {
-    return [...filtered].sort((a, b) => {
+    const sorted = [...filtered].sort((a, b) => {
+      if (sortBy === "crime_rank") {
+        const aRank = a.crimes_rank || 999
+        const bRank = b.crimes_rank || 999
+        return aRank - bRank
+      }
+      
+      if (sortBy === "nnb") {
+        const aNnb = a.nnb || 0
+        const bNnb = b.nnb || 0
+        return bNnb - aNnb // Descending order
+      }
+
       const aInCrime = participatingMemberIds.has(a.id)
       const bInCrime = participatingMemberIds.has(b.id)
 
@@ -132,7 +148,8 @@ export default function MemberList({
       const statusOrder: { [key: string]: number } = { online: 0, idle: 1, offline: 2 }
       return (statusOrder[a.status.state] || 3) - (statusOrder[b.status.state] || 3)
     })
-  }, [filtered, participatingMemberIds])
+    return sorted
+  }, [filtered, participatingMemberIds, sortBy])
 
   const getStatusIcon = (state: string) => {
     const iconMap: { [key: string]: string } = {
@@ -327,6 +344,42 @@ export default function MemberList({
         {!filtersCollapsed && (
           <div className="p-4 pt-0 space-y-4 border-t-2 border-border">
             <div className="space-y-2">
+              <label className="text-xs text-foreground font-bold block">Sort By</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => setSortBy("none")}
+                  className={`text-xs px-3 py-2 rounded-md border-2 transition-all font-bold ${
+                    sortBy === "none"
+                      ? "bg-primary text-white border-primary"
+                      : "bg-card border-border text-muted-foreground hover:border-primary hover:text-foreground"
+                  }`}
+                >
+                  Default
+                </button>
+                <button
+                  onClick={() => setSortBy("crime_rank")}
+                  className={`text-xs px-3 py-2 rounded-md border-2 transition-all font-bold ${
+                    sortBy === "crime_rank"
+                      ? "bg-primary text-white border-primary"
+                      : "bg-card border-border text-muted-foreground hover:border-primary hover:text-foreground"
+                  }`}
+                >
+                  Crime Rank
+                </button>
+                <button
+                  onClick={() => setSortBy("nnb")}
+                  className={`text-xs px-3 py-2 rounded-md border-2 transition-all font-bold ${
+                    sortBy === "nnb"
+                      ? "bg-primary text-white border-primary"
+                      : "bg-card border-border text-muted-foreground hover:border-primary hover:text-foreground"
+                  }`}
+                >
+                  NNB
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
               <label className="text-xs text-foreground font-bold block">Crime Status</label>
               <div className="grid grid-cols-3 gap-2">
                 <button
@@ -435,6 +488,14 @@ export default function MemberList({
                         <span className="font-bold text-primary">Lvl {member.level}</span>
                         <span>•</span>
                         <span>{member.position}</span>
+                        {member.bs_estimate_human && (
+                          <>
+                            <span>•</span>
+                            <span className="font-bold text-cyan-400" title="Battle stat estimate from FF Scouter">
+                              ~{member.bs_estimate_human}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -447,6 +508,18 @@ export default function MemberList({
                   <div className="text-muted-foreground">
                     <span className="font-bold">Days in Faction:</span> {member.days_in_faction}
                   </div>
+                  {member.crimes_rank !== undefined && (
+                    <div className="text-muted-foreground">
+                      <span className="font-bold">Crime Rank:</span>{" "}
+                      <span className="font-bold text-yellow-400">#{member.crimes_rank}</span>
+                    </div>
+                  )}
+                  {member.nnb !== undefined && member.nnb > 0 && (
+                    <div className="text-muted-foreground">
+                      <span className="font-bold">NNB:</span>{" "}
+                      <span className="font-bold text-purple-400">{member.nnb}</span>
+                    </div>
+                  )}
                   {member.money !== undefined && (
                     <div className="text-green-400 font-bold">
                       <span className="text-muted-foreground font-bold">Balance:</span> {formatCurrency(member.money)}
