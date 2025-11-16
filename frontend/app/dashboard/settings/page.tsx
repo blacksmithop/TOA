@@ -57,17 +57,22 @@ export default function SettingsPage() {
       }
     }
 
-    // Load individual API keys if they exist
     const ffScouterKey = localStorage.getItem("FFSCOUTER_API_KEY")
     const tornStatsKey = localStorage.getItem("TORNSTATS_API_KEY")
 
-    if (ffScouterKey || tornStatsKey) {
+    if (ffScouterKey) {
       setSettings((prev) => ({
         ...prev,
         ffScouter: {
           enabled: prev.ffScouter.enabled,
           apiKey: ffScouterKey || prev.ffScouter.apiKey,
         },
+      }))
+    }
+
+    if (tornStatsKey) {
+      setSettings((prev) => ({
+        ...prev,
         tornStats: {
           enabled: prev.tornStats.enabled,
           apiKey: tornStatsKey || prev.tornStats.apiKey,
@@ -239,7 +244,9 @@ export default function SettingsPage() {
                       <h3 className="font-semibold text-foreground">TornStats</h3>
                       <span className="text-xs bg-accent/20 text-accent px-2 py-1 rounded">Optional</span>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-2">Fetch CPR information</p>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Recommend members for open OC roles based on CPR
+                    </p>
                     <a
                       href="https://www.tornstats.com"
                       target="_blank"
