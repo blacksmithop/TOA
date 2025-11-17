@@ -1,6 +1,6 @@
 "use client"
 
-import { X, Copy, Check } from "lucide-react"
+import { X, Copy, Check } from 'lucide-react'
 import { useState } from "react"
 
 interface ItemDetails {

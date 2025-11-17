@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from 'next/navigation'
 import { useToast } from "@/hooks/use-toast"
 import { LogOut, MoreVertical, ArrowLeft, Info, RotateCcw } from 'lucide-react'
-import MemberList from "@/components/member-list"
+import MemberList from "@/components/members/member-list"
 import { fetchAndCacheItems } from "@/lib/items-cache"
 import { handleApiError, validateApiResponse } from "@/lib/api-error-handler"
 import { ResetConfirmationDialog } from "@/components/reset-confirmation-dialog"

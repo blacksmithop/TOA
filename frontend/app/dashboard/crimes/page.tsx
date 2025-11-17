@@ -4,8 +4,8 @@ import { useEffect, useState, useRef, useMemo } from "react"
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from "@/hooks/use-toast"
 import { LogOut, MoreVertical, ArrowLeft, Info, RotateCcw } from 'lucide-react'
-import CrimesList from "@/components/crimes-list"
-import CrimeSummary from "@/components/crime-summary"
+import CrimesList from "@/components/crimes/crimes-list"
+import CrimeSummary from "@/components/crimes/crime-summary"
 import { fetchAndCacheItems } from "@/lib/items-cache"
 import type { TornItem } from "@/lib/items-cache"
 import { handleApiError, validateApiResponse } from "@/lib/api-error-handler"

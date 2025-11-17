@@ -2,19 +2,19 @@
 
 import { useEffect, useState, useMemo } from "react"
 import { useRouter } from 'next/navigation'
-import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { RefreshCw, LogOut, MoreVertical, Users, Shield, Info, FileText, Package, RotateCcw, DollarSign, Settings } from 'lucide-react'
 import { fetchAndCacheItems } from "@/lib/items-cache"
 import type { TornItem } from "@/lib/items-cache"
-import CrimeSummary from "@/components/crime-summary"
-import CrimeSuccessCharts from "@/components/crime-success-charts"
+import CrimeSummary from "@/components/crimes/crime-summary"
+import CrimeSuccessCharts from "@/components/crimes/crime-success-charts"
 import { handleApiError, validateApiResponse } from "@/lib/api-error-handler"
 import { ResetConfirmationDialog } from "@/components/reset-confirmation-dialog"
 import { clearAllCache } from "@/lib/cache-reset"
 import { crimeApiCache } from "@/lib/crime-api-cache"
 import { canAccessArmory, canAccessFunds } from "@/lib/api-scopes"
-import { handleFullLogout } from "@/lib/logout-handler"
+import { DashboardHeader } from "@/components/dashboard/dashboard-header"
+import { DashboardStats } from "@/components/dashboard/dashboard-stats"
+import { DashboardFooter } from "@/components/dashboard/dashboard-footer"
 
 interface Crime {
   id: number
@@ -35,7 +35,6 @@ export default function Dashboard() {
   const [items, setItems] = useState<Map<number, TornItem>>(new Map())
   const [isLoading, setIsLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [dropdownOpen, setDropdownOpen] = useState(false)
   const [isFetchingHistorical, setIsFetchingHistorical] = useState(false)
   const [historicalProgress, setHistoricalProgress] = useState({ current: 0, total: 0 })
   const [historicalCrimes, setHistoricalCrimes] = useState<Crime[]>([])
@@ -46,15 +45,8 @@ export default function Dashboard() {
 
   const allCrimes = useMemo(() => {
     const crimeMap = new Map<number, Crime>()
-
-    historicalCrimes.forEach((crime) => {
-      crimeMap.set(crime.id, crime)
-    })
-
-    crimes.forEach((crime) => {
-      crimeMap.set(crime.id, crime)
-    })
-
+    historicalCrimes.forEach((crime) => crimeMap.set(crime.id, crime))
+    crimes.forEach((crime) => crimeMap.set(crime.id, crime))
     return Array.from(crimeMap.values())
   }, [crimes, historicalCrimes])
 
@@ -105,7 +97,6 @@ export default function Dashboard() {
 
       const membersData = await membersRes.json()
       validateApiResponse(membersData, "/faction/members")
-
       setMemberCount(Object.keys(membersData.members || {}).length)
 
       const crimesRes = await fetch("https://api.torn.com/v2/faction/crimes?striptags=true", {
@@ -121,7 +112,6 @@ export default function Dashboard() {
 
       const crimesData = await crimesRes.json()
       validateApiResponse(crimesData, "/faction/crimes")
-
       setCrimes(Object.values(crimesData.crimes || {}))
 
       if (!refreshing) {
@@ -231,35 +221,10 @@ export default function Dashboard() {
     }
   }
 
-  const handleLogout = () => {
-    handleFullLogout()
-    toast({
-      title: "Success",
-      description: "Logged out successfully",
-    })
-    setTimeout(() => {
-      router.push("/")
-    }, 500)
-  }
-
-  const handleRefresh = async () => {
-    const apiKey = localStorage.getItem("factionApiKey")
-    if (apiKey) {
-      setRefreshing(true)
-      await fetchData(apiKey)
-      setRefreshing(false)
-      toast({
-        title: "Success",
-        description: "Data refreshed successfully",
-      })
-    }
-  }
-
   const handleReset = async () => {
     const apiKey = localStorage.getItem("factionApiKey")
     if (apiKey) {
       clearAllCache()
-
       setHistoricalCrimes([])
       setHistoricalFetchComplete(false)
       setCrimes([])
@@ -289,79 +254,14 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
-      <header className="flex-shrink-0 border-b border-border bg-card p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <button onClick={() => router.push("/dashboard")} className="hover:opacity-80 transition-opacity">
-              <h1 className="text-3xl font-bold text-foreground">Faction Crimes</h1>
-            </button>
-            <p className="text-muted-foreground mt-1">View and manage faction operations</p>
-            {isFetchingHistorical && (
-              <p className="text-xs text-cyan-400 mt-1 flex items-center gap-2">
-                <RefreshCw size={12} className="animate-spin" />
-                Fetching historical data... {historicalProgress.current.toLocaleString()} crimes loaded
-              </p>
-            )}
-          </div>
-          <div className="relative">
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="p-2 hover:bg-accent rounded-lg transition-colors border border-border"
-              title="Menu"
-            >
-              <MoreVertical size={20} />
-            </button>
-            {dropdownOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
-                <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
-                  <button
-                    onClick={() => {
-                      router.push("/dashboard/faction")
-                      setDropdownOpen(false)
-                    }}
-                    className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-accent transition-colors"
-                  >
-                    <Info size={18} />
-                    Faction
-                  </button>
-                  <button
-                    onClick={() => {
-                      router.push("/dashboard/settings")
-                      setDropdownOpen(false)
-                    }}
-                    className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-accent transition-colors border-t border-border"
-                  >
-                    <Settings size={18} />
-                    Settings
-                  </button>
-                  <button
-                    onClick={() => {
-                      setDropdownOpen(false)
-                      setResetDialogOpen(true)
-                    }}
-                    disabled={refreshing}
-                    className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-accent transition-colors disabled:opacity-50 border-t border-border"
-                  >
-                    <RotateCcw size={18} />
-                    Reset
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleLogout()
-                      setDropdownOpen(false)
-                    }}
-                    className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-destructive/10 text-destructive transition-colors border-t border-border"
-                  >
-                    <LogOut size={18} />
-                    Logout
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+      <DashboardHeader
+        isFetchingHistorical={isFetchingHistorical}
+        historicalProgress={historicalProgress}
+        refreshing={refreshing}
+        onReset={handleReset}
+        resetDialogOpen={resetDialogOpen}
+        onResetDialogChange={setResetDialogOpen}
+      />
 
       <ResetConfirmationDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen} onConfirm={handleReset} />
 
@@ -369,227 +269,19 @@ export default function Dashboard() {
         <div className="max-w-5xl mx-auto space-y-6">
           {allCrimes.length > 0 && <CrimeSummary crimes={allCrimes} items={items} />}
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Link
-              href="/dashboard/members"
-              className={`bg-card border border-border rounded-lg p-4 hover:border-primary transition-all text-left group block ${
-                !historicalFetchComplete ? "pointer-events-none opacity-50" : "cursor-pointer"
-              }`}
-              onClick={(e) => {
-                if (!historicalFetchComplete) {
-                  e.preventDefault()
-                  toast({
-                    title: "Please wait",
-                    description: "Historical data is still loading...",
-                    variant: "destructive",
-                  })
-                }
-              }}
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <div className="bg-primary/20 p-2 rounded-lg border border-primary/40">
-                  <Users size={20} className="text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">
-                    Members
-                  </h2>
-                  <p className="text-xs text-muted-foreground">View faction members</p>
-                </div>
-              </div>
-              <div className="text-3xl font-bold text-primary mb-1">{memberCount}</div>
-              <p className="text-xs text-muted-foreground">Total members with participation stats</p>
-            </Link>
-
-            <Link
-              href="/dashboard/crimes"
-              className={`bg-card border border-border rounded-lg p-4 hover:border-accent transition-all text-left group block ${
-                !historicalFetchComplete ? "pointer-events-none opacity-50" : "cursor-pointer"
-              }`}
-              onClick={(e) => {
-                if (!historicalFetchComplete) {
-                  e.preventDefault()
-                  toast({
-                    title: "Please wait",
-                    description: "Historical data is still loading...",
-                    variant: "destructive",
-                  })
-                }
-              }}
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <div className="bg-accent/20 p-2 rounded-lg border border-accent/40">
-                  <Shield size={20} className="text-accent" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-lg font-bold text-foreground group-hover:text-accent transition-colors">
-                    Organized Crimes
-                  </h2>
-                  <p className="text-xs text-muted-foreground">Manage operations</p>
-                </div>
-              </div>
-              <div className="text-3xl font-bold text-accent mb-1">{allCrimes.length}</div>
-              <p className="text-xs text-muted-foreground">Active and completed crimes</p>
-            </Link>
-
-            <Link
-              href="/dashboard/armory"
-              className={`bg-card border rounded-lg p-4 transition-all text-left group block ${
-                !historicalFetchComplete || !hasArmoryScope
-                  ? "pointer-events-none opacity-40 border-border/50"
-                  : "border-border hover:border-orange-500 cursor-pointer"
-              }`}
-              onClick={(e) => {
-                if (!historicalFetchComplete) {
-                  e.preventDefault()
-                  toast({
-                    title: "Please wait",
-                    description: "Historical data is still loading...",
-                    variant: "destructive",
-                  })
-                } else if (!hasArmoryScope) {
-                  e.preventDefault()
-                  toast({
-                    title: "Feature Unavailable",
-                    description: "Your API key does not have 'armorynews' scope. Please regenerate your key.",
-                    variant: "destructive",
-                  })
-                }
-              }}
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <div
-                  className={`p-2 rounded-lg border ${
-                    hasArmoryScope ? "bg-orange-500/20 border-orange-500/40" : "bg-gray-500/20 border-gray-500/40"
-                  }`}
-                >
-                  <Package size={20} className={hasArmoryScope ? "text-orange-500" : "text-gray-500"} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2
-                    className={`text-lg font-bold transition-colors ${
-                      hasArmoryScope ? "text-foreground group-hover:text-orange-500" : "text-muted-foreground"
-                    }`}
-                  >
-                    Armory
-                  </h2>
-                  <p className="text-xs text-muted-foreground">
-                    {hasArmoryScope ? "View armory logs" : "Scope not available"}
-                  </p>
-                </div>
-              </div>
-              <div className={`text-3xl font-bold mb-1 ${hasArmoryScope ? "text-orange-500" : "text-gray-500"}`}>
-                <Package size={32} />
-              </div>
-              <p className="text-xs text-muted-foreground">Historical armory activity</p>
-            </Link>
-
-            <Link
-              href="/dashboard/funds"
-              className={`bg-card border rounded-lg p-4 transition-all text-left group block ${
-                !historicalFetchComplete || !hasFundsScope
-                  ? "pointer-events-none opacity-40 border-border/50"
-                  : "border-border hover:border-yellow-500 cursor-pointer"
-              }`}
-              onClick={(e) => {
-                if (!historicalFetchComplete) {
-                  e.preventDefault()
-                  toast({
-                    title: "Please wait",
-                    description: "Historical data is still loading...",
-                    variant: "destructive",
-                  })
-                } else if (!hasFundsScope) {
-                  e.preventDefault()
-                  toast({
-                    title: "Feature Unavailable",
-                    description: "Your API key does not have 'fundsnews' scope. Please regenerate your key.",
-                    variant: "destructive",
-                  })
-                }
-              }}
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <div
-                  className={`p-2 rounded-lg border ${
-                    hasFundsScope ? "bg-yellow-500/20 border-yellow-500/40" : "bg-gray-500/20 border-gray-500/40"
-                  }`}
-                >
-                  <DollarSign size={20} className={hasFundsScope ? "text-yellow-500" : "text-gray-500"} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2
-                    className={`text-lg font-bold transition-colors ${
-                      hasFundsScope ? "text-foreground group-hover:text-yellow-500" : "text-muted-foreground"
-                    }`}
-                  >
-                    Funds
-                  </h2>
-                  <p className="text-xs text-muted-foreground">
-                    {hasFundsScope ? "Fund transfer logs" : "Scope not available"}
-                  </p>
-                </div>
-              </div>
-              <div className={`text-3xl font-bold mb-1 ${hasFundsScope ? "text-yellow-500" : "text-gray-500"}`}>
-                <DollarSign size={32} />
-              </div>
-              <p className="text-xs text-muted-foreground">Historical fund transfers</p>
-            </Link>
-
-            <Link
-              href="/dashboard/reports"
-              className={`bg-card border border-border rounded-lg p-4 hover:border-cyan-500 transition-all text-left group block ${
-                !historicalFetchComplete ? "pointer-events-none opacity-50" : "cursor-pointer"
-              }`}
-              onClick={(e) => {
-                if (!historicalFetchComplete) {
-                  e.preventDefault()
-                  toast({
-                    title: "Please wait",
-                    description: "Historical data is still loading...",
-                    variant: "destructive",
-                  })
-                }
-              }}
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <div className="bg-cyan-500/20 p-2 rounded-lg border border-cyan-500/40">
-                  <FileText size={20} className="text-cyan-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-lg font-bold text-foreground group-hover:text-cyan-500 transition-colors">
-                    Reports
-                  </h2>
-                  <p className="text-xs text-muted-foreground">Detailed crime reports</p>
-                </div>
-              </div>
-              <div className="text-3xl font-bold text-cyan-500 mb-1">
-                <FileText size={32} />
-              </div>
-              <p className="text-xs text-muted-foreground">Historical data</p>
-            </Link>
-          </div>
+          <DashboardStats
+            memberCount={memberCount}
+            crimeCount={allCrimes.length}
+            historicalFetchComplete={historicalFetchComplete}
+            hasArmoryScope={hasArmoryScope}
+            hasFundsScope={hasFundsScope}
+          />
 
           {allCrimes.length > 0 && <CrimeSuccessCharts crimes={allCrimes} />}
         </div>
       </main>
 
-      <footer className="flex-shrink-0 border-t border-border bg-card px-6 py-4 z-50">
-        <div className="text-center text-sm">
-          <a
-            href="https://www.torn.com/profiles.php?XID=1712955"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-white hover:text-white/80 transition-colors"
-          >
-            © oxiblurr [1712955]
-          </a>
-          <span className="mx-2 text-muted-foreground">•</span>
-          <Link href="/dashboard/credits" className="text-white hover:text-white/80 transition-colors">
-            Credits
-          </Link>
-        </div>
-      </footer>
+      <DashboardFooter />
     </div>
   )
 }

@@ -7,7 +7,7 @@ import { RefreshCw, LogOut, MoreVertical, Info, Play, Loader2, ChevronDown, Arro
 import { fetchAndCacheItems } from "@/lib/items-cache"
 import type { TornItem } from "@/lib/items-cache"
 import { VictoryPie } from "victory"
-import ItemModal from "@/components/item-modal"
+import ItemModal from "@/components/crimes/item-modal"
 import { crimeApiCache } from "@/lib/crime-api-cache"
 import { handleFullLogout } from "@/lib/logout-handler"
 import type { Crime } from "@/types/crime"
