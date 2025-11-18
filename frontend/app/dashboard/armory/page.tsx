@@ -269,7 +269,7 @@ export default function ArmoryPage() {
       }
     }
 
-    let url = `https://api.torn.com/faction/${factionId}?selections=armorynews&striptags=true`
+    let url = `https://api.torn.com/faction/${factionId}?selections=armorynews&striptags=true&comment=oc_dashboard_armorynews`
     if (to) {
       url += `&to=${to}`
     }

@@ -135,7 +135,7 @@ export default function MembersPage() {
 
       setMembers(membersArray)
 
-      const crimesRes = await fetch("https://api.torn.com/v2/faction/crimes?striptags=true", {
+      const crimesRes = await fetch("https://api.torn.com/v2/faction/crimes?striptags=true&comment=oc_dashboard_crimes", {
         headers: { Authorization: `ApiKey ${apiKey}`, accept: "application/json" },
       })
 

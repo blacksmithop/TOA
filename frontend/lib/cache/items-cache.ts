@@ -66,7 +66,7 @@ export async function fetchAndCacheItems(apiKey: string): Promise<Map<number, To
 
     // Cache expired or doesn't exist, fetch from API
     console.log("[v0] Fetching items from API (cache expired or missing)")
-    const response = await fetch("https://api.torn.com/v2/torn/items?sort=ASC&striptags=true", {
+    const response = await fetch("https://api.torn.com/v2/torn/items?sort=ASC&striptags=true&comment=oc_dashboard_items", {
       headers: {
         Authorization: `ApiKey ${apiKey}`,
         accept: "application/json",

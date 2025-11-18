@@ -88,7 +88,7 @@ export default function Dashboard() {
       const membersData = await fetchAndCacheMembers(apiKey)
       setMemberCount(membersData.size)
 
-      const crimesRes = await fetch("https://api.torn.com/v2/faction/crimes?striptags=true", {
+      const crimesRes = await fetch("https://api.torn.com/v2/faction/crimes?striptags=true&comment=oc_dashboard_crimes", {
         headers: {
           Authorization: `ApiKey ${apiKey}`,
           accept: "application/json",
@@ -144,7 +144,7 @@ export default function Dashboard() {
 
     try {
       console.log("[v0] Fetching latest crimes (fresh, not cached)")
-      const firstUrl = `https://api.torn.com/v2/faction/crimes?cat=completed&sort=DESC&striptags=true`
+      const firstUrl = `https://api.torn.com/v2/faction/crimes?cat=completed&sort=DESC&striptags=true&comment=oc_dashboard_crimes`
       const firstData = await crimeApiCache.fetchWithCache(firstUrl, apiKey, true)
 
       if (firstData.crimes) {
@@ -171,7 +171,7 @@ export default function Dashboard() {
         await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY))
         requestCount++
 
-        const historicalUrl = `https://api.torn.com/v2/faction/crimes?cat=completed&sort=DESC&to=${oldestTimestamp}&striptags=true`
+        const historicalUrl = `https://api.torn.com/v2/faction/crimes?cat=completed&sort=DESC&to=${oldestTimestamp}&striptags=true&comment=oc_dashboard_crimes`
         const data = await crimeApiCache.fetchWithCache(historicalUrl, apiKey, false)
 
         if (data.crimes && Object.keys(data.crimes).length > 0) {

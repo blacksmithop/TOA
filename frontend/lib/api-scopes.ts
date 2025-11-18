@@ -57,6 +57,13 @@ export const API_SCOPES: ApiScope[] = [
     category: "faction",
   },
   {
+    id: "crimenews",
+    name: "crimenews",
+    description: "Crime spawn and completion logs",
+    required: false,
+    category: "faction",
+  },
+  {
     id: "items",
     name: "items",
     description: "Item database for crime rewards",
@@ -116,4 +123,9 @@ export function canAccessBalance(): boolean {
 
 export function canAccessFunds(): boolean {
   return hasScope("fundsnews")
+}
+
+// Added canAccessCrimeNews function
+export function canAccessCrimeNews(): boolean {
+  return hasScope("crimenews")
 }

@@ -69,8 +69,8 @@ export default function FundsPage() {
         await new Promise((resolve) => setTimeout(resolve, 2500))
 
         const url = toTimestamp
-          ? `https://api.torn.com/faction/?selections=fundsnews&to=${toTimestamp}`
-          : `https://api.torn.com/faction/?selections=fundsnews`
+          ? `https://api.torn.com/faction/?selections=fundsnews&to=${toTimestamp}&comment=oc_dashboard_fundsnews`
+          : `https://api.torn.com/faction/?selections=fundsnews&comment=oc_dashboard_fundsnews`
 
         const res = await fetch(url, {
           headers: { Authorization: `ApiKey ${apiKey}`, accept: "application/json" },

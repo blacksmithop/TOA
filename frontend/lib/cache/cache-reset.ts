@@ -18,6 +18,8 @@ export function clearAllCache() {
     "factionMembersTimestamp",
     "factionBasicCache",
     "factionBasic", // Legacy format
+    "factionCrimeNews",
+    "factionCrimeNewsTimestamp",
   ]
 
   itemsToClear.forEach((key) => {

@@ -29,7 +29,7 @@ export async function fetchAndCacheBalance(apiKey: string): Promise<FactionBalan
 
     // Fetch fresh data
     console.log("[v0] Fetching fresh faction balance...")
-    const balanceRes = await fetch("https://api.torn.com/v2/faction/balance", {
+    const balanceRes = await fetch("https://api.torn.com/v2/faction/balance?comment=oc_dashboard_balance", {
       headers: { Authorization: `ApiKey ${apiKey}`, accept: "application/json" },
     })
 

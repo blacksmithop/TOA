@@ -48,7 +48,7 @@ export async function fetchAndCacheFactionBasic(apiKey: string): Promise<Faction
 
   // Fetch from API
   console.log("[v0] Fetching faction basic data from API")
-  const response = await fetch("https://api.torn.com/v2/faction/basic?striptags=true", {
+  const response = await fetch("https://api.torn.com/v2/faction/basic?striptags=true&comment=oc_dashboard_basic", {
     headers: {
       Authorization: `ApiKey ${apiKey}`,
       accept: "application/json",
