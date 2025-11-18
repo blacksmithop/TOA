@@ -145,17 +145,12 @@ export default function CrimesPage() {
         }
       }
 
-      // Load members from cache
-      const cachedMembers = localStorage.getItem("factionMembers")
-      if (cachedMembers) {
-        try {
-          const membersData = JSON.parse(cachedMembers)
-          setMembers(Object.values(membersData.members || {}))
-          console.log(`[v0] Loaded ${Object.keys(membersData.members || {}).length} members from cache`)
-        } catch (e) {
-          console.error("[v0] Failed to parse cached members:", e)
-        }
-      }
+      fetchAndCacheMembers(apiKey).then(membersData => {
+        setMembers(Array.from(membersData.values()))
+        console.log(`[v0] Loaded ${membersData.size} members from cache`)
+      }).catch(e => {
+        console.error("[v0] Failed to load members:", e)
+      })
 
       // Load historical crimes
       const cached = localStorage.getItem("factionHistoricalCrimes")

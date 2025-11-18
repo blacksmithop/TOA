@@ -47,10 +47,9 @@ export async function fetchAndCacheMembers(apiKey: string): Promise<Map<number, 
       return new Map(Object.entries(data).map(([key, value]: [string, any]) => [Number.parseInt(key), value]))
     }
 
-    // Cache expired or doesn't exist, fetch from API
-    console.log("[v0] Fetching members from API (cache expired or missing)")
+    console.log("[v0] Fetching members from API v2 (cache expired or missing)")
     const response = await fetch(
-      `https://api.torn.com/faction/?selections=basic&key=${apiKey}&comment=oc_dashboard_members`
+      `https://api.torn.com/v2/faction/members?key=${apiKey}&comment=oc_dashboard_members`
     )
 
     if (!response.ok) {
@@ -68,17 +67,19 @@ export async function fetchAndCacheMembers(apiKey: string): Promise<Map<number, 
 
     const membersMap: { [key: number]: FactionMember } = {}
 
-    Object.values(data.members || {}).forEach((member: any) => {
-      membersMap[member.member_id] = {
-        id: member.member_id,
-        name: member.name,
-        status: member.status,
-        position: member.position,
-        level: member.level,
-        days_in_faction: member.days_in_faction,
-        last_action: member.last_action,
-      }
-    })
+    if (Array.isArray(data.members)) {
+      data.members.forEach((member: any) => {
+        membersMap[member.id] = {
+          id: member.id,
+          name: member.name,
+          status: member.status,
+          position: member.position,
+          level: member.level,
+          days_in_faction: member.days_in_faction,
+          last_action: member.last_action,
+        }
+      })
+    }
 
     // Cache the members
     localStorage.setItem(MEMBERS_CACHE_KEY, JSON.stringify(membersMap))
