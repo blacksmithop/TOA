@@ -49,12 +49,9 @@ export async function fetchAndCacheMembers(apiKey: string): Promise<Map<number, 
 
     // Cache expired or doesn't exist, fetch from API
     console.log("[v0] Fetching members from API (cache expired or missing)")
-    const response = await fetch("https://api.torn.com/v2/faction/members?striptags=true&comment=oc_dashboard_members", {
-      headers: {
-        Authorization: `ApiKey ${apiKey}`,
-        accept: "application/json",
-      },
-    })
+    const response = await fetch(
+      `https://api.torn.com/faction/?selections=basic&key=${apiKey}&comment=oc_dashboard_members`
+    )
 
     if (!response.ok) {
       throw new Error(`API request failed: ${response.status}`)
@@ -72,8 +69,8 @@ export async function fetchAndCacheMembers(apiKey: string): Promise<Map<number, 
     const membersMap: { [key: number]: FactionMember } = {}
 
     Object.values(data.members || {}).forEach((member: any) => {
-      membersMap[member.id] = {
-        id: member.id,
+      membersMap[member.member_id] = {
+        id: member.member_id,
         name: member.name,
         status: member.status,
         position: member.position,
@@ -91,11 +88,11 @@ export async function fetchAndCacheMembers(apiKey: string): Promise<Map<number, 
     return new Map(Object.entries(membersMap).map(([key, value]) => [Number.parseInt(key), value]))
   } catch (error) {
     console.error("[v0] Error fetching members:", error)
-    if (error instanceof Error && error.message.includes("does not have access")) {
-      throw error
+    const cachedData = await getMembersFromCache()
+    if (cachedData.size > 0) {
+      console.log("[v0] Falling back to cached members data")
+      return cachedData
     }
-    // Fall back to cache if available
-    console.log("[v0] Falling back to cached members data")
-    return getMembersFromCache()
+    throw error
   }
 }
