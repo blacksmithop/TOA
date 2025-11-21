@@ -3,6 +3,7 @@
 import type { Slot, Member } from "@/types/crime"
 import { useState } from "react"
 import { AlertTriangle } from "lucide-react"
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ProgressRing } from "./progress-ring"
 import { getPositionPassRateColor } from "@/lib/crime-colors"
 import { getWeightColor, getWeightBgColor } from "@/lib/role-weights"
@@ -99,10 +100,27 @@ export default function CrimeSlot({
             )}
             {slot.user ? (
               <>
-                {isAtRisk && <span className="text-orange-400">⚠️</span>}
-                {isHighRiskRole && (
-                  <AlertTriangle size={14} className="text-red-400 shrink-0" title="High weight role with low CPR!" />
-                )}
+            {isAtRisk && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-orange-400 cursor-help"><AlertTriangle size={14} className="text-red-400 shrink-0" /></span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Low CPR</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {isHighRiskRole && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <AlertTriangle size={14} className="text-red-400 shrink-0" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>High weight role with low CPR!</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
                 <a
                   href={`https://www.torn.com/profiles.php?XID=${slot.user.id}`}
                   target="_blank"
