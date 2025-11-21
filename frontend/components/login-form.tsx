@@ -71,7 +71,8 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
 
       <div className="bg-card/50 border border-border rounded-lg p-4 space-y-2">
         <h3 className="text-sm font-semibold text-foreground text-center">Data Policy</h3>
-        <ul className="text-xs text-muted-foreground space-y-1.5">
+        <ul className="text-xs text-semibold space-y-1.5">
+          <li>• Faction API access is required</li>
           <li>• Your API Key and any cache is stored in the browser</li>
           <li>• Logging out will clear the cache</li>
           <li>• Third-party integrations such as FFScouter, Yata, CPR Data are opt-in</li>
