@@ -64,6 +64,13 @@ export const API_SCOPES: ApiScope[] = [
     category: "faction",
   },
   {
+    id: "medical",
+    name: "medical",
+    description: "Faction medical items",
+    required: false,
+    category: "faction",
+  },
+  {
     id: "items",
     name: "items",
     description: "Item database for crime rewards",
@@ -128,4 +135,8 @@ export function canAccessFunds(): boolean {
 // Added canAccessCrimeNews function
 export function canAccessCrimeNews(): boolean {
   return hasScope("crimenews")
+}
+
+export function canAccessMedical(): boolean {
+  return hasScope("medical")
 }

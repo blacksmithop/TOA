@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
-import { useRouter } from 'next/navigation'
+import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { fetchAndCacheItems } from "@/lib/cache/items-cache"
 import type { TornItem } from "@/lib/cache/items-cache"
@@ -12,7 +12,7 @@ import { handleApiError, validateApiResponse } from "@/lib/api-error-handler"
 import { ResetConfirmationDialog } from "@/components/reset-confirmation-dialog"
 import { clearAllCache } from "@/lib/cache/cache-reset"
 import { crimeApiCache } from "@/lib/cache/crime-api-cache"
-import { canAccessArmory, canAccessFunds } from "@/lib/api-scopes"
+import { canAccessArmory, canAccessFunds, canAccessMedical } from "@/lib/api-scopes"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { DashboardStats } from "@/components/dashboard/dashboard-stats"
 import { DashboardFooter } from "@/components/dashboard/dashboard-footer"
@@ -43,6 +43,7 @@ export default function Dashboard() {
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
   const [hasArmoryScope, setHasArmoryScope] = useState(true)
   const [hasFundsScope, setHasFundsScope] = useState(true)
+  const [hasMedicalScope, setHasMedicalScope] = useState(true)
 
   const allCrimes = useMemo(() => {
     const crimeMap = new Map<number, Crime>()
@@ -60,6 +61,7 @@ export default function Dashboard() {
 
     setHasArmoryScope(canAccessArmory())
     setHasFundsScope(canAccessFunds())
+    setHasMedicalScope(canAccessMedical())
 
     const cached = localStorage.getItem("factionHistoricalCrimes")
     if (cached) {
@@ -88,12 +90,15 @@ export default function Dashboard() {
       const membersData = await fetchAndCacheMembers(apiKey)
       setMemberCount(membersData.size)
 
-      const crimesRes = await fetch("https://api.torn.com/v2/faction/crimes?striptags=true&comment=oc_dashboard_crimes", {
-        headers: {
-          Authorization: `ApiKey ${apiKey}`,
-          accept: "application/json",
+      const crimesRes = await fetch(
+        "https://api.torn.com/v2/faction/crimes?striptags=true&comment=oc_dashboard_crimes",
+        {
+          headers: {
+            Authorization: `ApiKey ${apiKey}`,
+            accept: "application/json",
+          },
         },
-      })
+      )
 
       if (!crimesRes.ok) {
         await handleApiError(crimesRes, "/faction/crimes")
@@ -264,6 +269,7 @@ export default function Dashboard() {
             historicalFetchComplete={historicalFetchComplete}
             hasArmoryScope={hasArmoryScope}
             hasFundsScope={hasFundsScope}
+            hasMedicalScope={hasMedicalScope}
           />
 
           {allCrimes.length > 0 && <CrimeSuccessCharts crimes={allCrimes} />}

@@ -1,7 +1,9 @@
 "use client"
 
+import type React from "react"
+
 import Link from "next/link"
-import { Users, Shield, Package, DollarSign, FileText } from 'lucide-react'
+import { Users, Shield, Package, DollarSign, FileText, Heart } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface DashboardStatsProps {
@@ -10,6 +12,7 @@ interface DashboardStatsProps {
   historicalFetchComplete: boolean
   hasArmoryScope: boolean
   hasFundsScope: boolean
+  hasMedicalScope: boolean
 }
 
 export function DashboardStats({
@@ -18,6 +21,7 @@ export function DashboardStats({
   historicalFetchComplete,
   hasArmoryScope,
   hasFundsScope,
+  hasMedicalScope,
 }: DashboardStatsProps) {
   const { toast } = useToast()
 
@@ -179,6 +183,51 @@ export function DashboardStats({
           <DollarSign size={32} />
         </div>
         <p className="text-xs text-muted-foreground">Historical fund transfers</p>
+      </Link>
+
+      <Link
+        href="/dashboard/medical"
+        className={`bg-card border rounded-lg p-4 transition-all text-left group block ${
+          !historicalFetchComplete || !hasMedicalScope
+            ? "pointer-events-none opacity-40 border-border/50"
+            : "border-border hover:border-rose-500 cursor-pointer"
+        }`}
+        onClick={(e) => {
+          if (!historicalFetchComplete || !hasMedicalScope) {
+            handleDisabledClick(
+              e,
+              !hasMedicalScope
+                ? "Your API key does not have 'medical' scope. Please regenerate your key."
+                : "Historical data is still loading...",
+            )
+          }
+        }}
+      >
+        <div className="flex items-center gap-3 mb-2">
+          <div
+            className={`p-2 rounded-lg border ${
+              hasMedicalScope ? "bg-rose-500/20 border-rose-500/40" : "bg-gray-500/20 border-gray-500/40"
+            }`}
+          >
+            <Heart size={20} className={hasMedicalScope ? "text-rose-500" : "text-gray-500"} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2
+              className={`text-lg font-bold transition-colors ${
+                hasMedicalScope ? "text-foreground group-hover:text-rose-500" : "text-muted-foreground"
+              }`}
+            >
+              Medical
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {hasMedicalScope ? "Medical inventory" : "Scope not available"}
+            </p>
+          </div>
+        </div>
+        <div className={`text-3xl font-bold mb-1 ${hasMedicalScope ? "text-rose-500" : "text-gray-500"}`}>
+          <Heart size={32} />
+        </div>
+        <p className="text-xs text-muted-foreground">Faction medical items</p>
       </Link>
 
       <Link
