@@ -128,6 +128,19 @@ export function extractActions(news: ArmoryNewsItem[]): string[] {
 }
 
 /**
+ * Extracts unique item names from armory news items, optionally filtered by category
+ */
+export function extractItemNames(items: Map<number, TornItem>, news: ArmoryNewsItem[], category?: string): string[] {
+  const itemNameSet = new Set<string>()
+
+  for (const log of news) {
+    itemNameSet.add(log.item.name)
+  }
+
+  return ["All Items", ...Array.from(itemNameSet).sort()]
+}
+
+/**
  * Applies filters to armory news
  */
 export function filterArmoryNews(
@@ -137,6 +150,7 @@ export function filterArmoryNews(
     userId?: number
     timeFilter?: string
     action?: string
+    itemName?: string
   },
   items: Map<number, TornItem>,
 ): ArmoryNewsItem[] {
@@ -145,6 +159,10 @@ export function filterArmoryNews(
   // Category filter
   if (filters.category && filters.category !== "All") {
     filtered = filtered.filter((log) => getItemCategory(items, log.item.name) === filters.category)
+  }
+
+  if (filters.itemName && filters.itemName !== "All Items") {
+    filtered = filtered.filter((log) => log.item.name === filters.itemName)
   }
 
   // User filter

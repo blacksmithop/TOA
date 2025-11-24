@@ -23,10 +23,14 @@ import {
   getItemByName,
   getItemCategory,
   extractCategories,
+  extractItemNames,
   filterArmoryNews,
   loadMaxFetchCount,
   saveMaxFetchCount,
 } from "@/lib/armory/utils"
+
+// Define ARMORY_ACTIONS constant
+const ARMORY_ACTIONS = ["Add", "Remove", "Upgrade"]
 
 interface Member {
   id: number
@@ -42,7 +46,7 @@ export default function ArmoryPage() {
   const [items, setItems] = useState<Map<number, TornItem>>(new Map())
   const [members, setMembers] = useState<FactionMember[]>([])
   const [isFetching, setIsFetching] = useState(false)
-  const [fetchProgress, setFetchProgress] = useState<FetchProgress>({ current: 0, max: 0 })
+  const [fetchProgress, setFetchProgress] = useState<FetchProgress>({ current: 0, max: 0, requestNumber: 0 })
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedCategory, setSelectedCategory] = useState<string>("All")
   const [selectedUser, setSelectedUser] = useState<string>("All")
@@ -53,6 +57,7 @@ export default function ArmoryPage() {
   const [showConfigModal, setShowConfigModal] = useState(false)
   const [maxFetchCount, setMaxFetchCount] = useState(1000)
   const [hasArmoryAccess, setHasArmoryAccess] = useState<boolean>(true)
+  const [selectedItemFilter, setSelectedItemFilter] = useState<string>("All Items")
 
   // Initialize data on mount
   useEffect(() => {
@@ -115,7 +120,7 @@ export default function ArmoryPage() {
 
     setIsFetching(true)
     setHasArmoryAccess(true)
-    setFetchProgress({ current: 0, max: maxFetchCount })
+    setFetchProgress({ current: 0, max: maxFetchCount, requestNumber: 0 })
 
     try {
       toast({
@@ -129,21 +134,15 @@ export default function ArmoryPage() {
           setFetchProgress(progress)
           toast({
             title: "Fetching",
-            description: `Fetched ${progress.current}/${progress.max} armory logs...`,
+            description: (
+              <span>
+                {!progress.isCacheHit && (
+                  <span className="text-cyan-500 font-mono mr-2">#{progress.requestNumber}</span>
+                )}
+                Fetched {progress.current}/{progress.max}
+              </span>
+            ),
           })
-        },
-        onRateLimit: (requestCount, maxRequests, isWaiting, waitTimeSeconds) => {
-          if (isWaiting && waitTimeSeconds) {
-            toast({
-              title: "Rate Limit",
-              description: `Sleeping for ${waitTimeSeconds}s (10 requests/min limit reached)`,
-            })
-          } else {
-            toast({
-              title: "Request",
-              description: `Request ${requestCount}/${maxRequests}`,
-            })
-          }
         },
         onError: (error) => {
           if (error.message === "API_ACCESS_DENIED") {
@@ -177,7 +176,7 @@ export default function ArmoryPage() {
       }
     } finally {
       setIsFetching(false)
-      setFetchProgress({ current: 0, max: 0 })
+      setFetchProgress({ current: 0, max: 0, requestNumber: 0 })
     }
   }
 
@@ -221,15 +220,22 @@ export default function ArmoryPage() {
   }
 
   const categories = extractCategories(items, armoryNews)
-  const actions = ["Add", "Remove", "Upgrade"] // Using constants instead of extractActions
+  const actions = ARMORY_ACTIONS
+
+  const categoryFilteredNews =
+    selectedCategory === "All"
+      ? armoryNews
+      : armoryNews.filter((log) => getItemCategory(items, log.item.name) === selectedCategory)
+
+  const availableItems = extractItemNames(items, categoryFilteredNews)
 
   const filteredNews = filterArmoryNews(
-    armoryNews,
+    categoryFilteredNews,
     {
-      category: selectedCategory,
       userId: selectedUser !== "All" ? Number.parseInt(selectedUser, 10) : undefined,
       timeFilter: timeFilter !== "All" ? timeFilter : undefined,
       action: selectedAction !== "All" ? selectedAction : undefined,
+      itemName: selectedItemFilter !== "All Items" ? selectedItemFilter : undefined,
     },
     items,
   )
@@ -259,6 +265,7 @@ export default function ArmoryPage() {
               selectedCategory={selectedCategory}
               onCategoryChange={(category) => {
                 setSelectedCategory(category)
+                setSelectedItemFilter("All Items")
                 setCurrentPage(1)
               }}
               members={members}
@@ -281,6 +288,12 @@ export default function ArmoryPage() {
               selectedAction={selectedAction}
               onActionChange={(action) => {
                 setSelectedAction(action)
+                setCurrentPage(1)
+              }}
+              availableItems={availableItems}
+              selectedItem={selectedItemFilter}
+              onItemChange={(item) => {
+                setSelectedItemFilter(item)
                 setCurrentPage(1)
               }}
             />

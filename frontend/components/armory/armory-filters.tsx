@@ -20,6 +20,9 @@ interface ArmoryFiltersProps {
   onItemsPerPageChange: (count: number) => void
   selectedAction: string
   onActionChange: (action: string) => void
+  availableItems: string[]
+  selectedItem: string
+  onItemChange: (item: string) => void
 }
 
 export default function ArmoryFilters({
@@ -35,7 +38,12 @@ export default function ArmoryFilters({
   onItemsPerPageChange,
   selectedAction,
   onActionChange,
+  availableItems,
+  selectedItem,
+  onItemChange,
 }: ArmoryFiltersProps) {
+  const items = availableItems || []
+
   return (
     <div className="bg-card border border-border rounded-lg p-4">
       <h3 className="text-sm font-medium text-muted-foreground mb-4">Filters</h3>
@@ -59,6 +67,21 @@ export default function ArmoryFilters({
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground">Item</label>
+          <select
+            value={selectedItem}
+            onChange={(e) => onItemChange(e.target.value)}
+            className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground text-sm"
+          >
+            {items.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Action Filter - Now a dropdown */}

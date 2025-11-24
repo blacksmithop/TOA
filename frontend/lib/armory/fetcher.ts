@@ -4,9 +4,8 @@ import { parseArmoryNewsItems } from "./parser"
 
 export interface FetchOptions {
   maxCount: number
-  onProgress?: (progress: FetchProgress) => void
+  onProgress?: (progress: FetchProgress & { requestNumber: number; isCacheHit: boolean }) => void
   onError?: (error: Error) => void
-  onRateLimit?: (requestCount: number, maxRequests: number, isWaiting: boolean, waitTimeSeconds?: number) => void
   delayMs?: number
   rateLimit?: { requestsPerMinute: number }
 }
@@ -15,23 +14,15 @@ class RateLimiter {
   private requestTimestamps: number[] = []
   private readonly maxRequests: number
   private readonly timeWindowMs: number
-  private onRateLimit?: (
-    requestCount: number,
-    maxRequests: number,
-    isWaiting: boolean,
-    waitTimeSeconds?: number,
-  ) => void
+  private requestCount = 0
 
-  constructor(requestsPerMinute: number, onRateLimit?: FetchOptions["onRateLimit"]) {
+  constructor(requestsPerMinute: number) {
     this.maxRequests = requestsPerMinute
     this.timeWindowMs = 60000 // 1 minute in milliseconds
-    this.onRateLimit = onRateLimit
   }
 
-  getRequestCount(): number {
-    const now = Date.now()
-    this.requestTimestamps = this.requestTimestamps.filter((timestamp) => now - timestamp < this.timeWindowMs)
-    return this.requestTimestamps.length
+  getRequestNumber(): number {
+    return this.requestCount
   }
 
   async waitForSlot(): Promise<void> {
@@ -44,11 +35,6 @@ class RateLimiter {
       // Calculate how long to wait
       const oldestRequest = this.requestTimestamps[0]
       const waitTime = this.timeWindowMs - (now - oldestRequest) + 100 // +100ms buffer
-      const waitTimeSeconds = Math.ceil(waitTime / 1000)
-
-      console.log(`[v0] Rate limit reached, waiting ${waitTimeSeconds}s`)
-
-      this.onRateLimit?.(this.requestTimestamps.length, this.maxRequests, true, waitTimeSeconds)
 
       await new Promise((resolve) => setTimeout(resolve, waitTime))
 
@@ -58,8 +44,7 @@ class RateLimiter {
 
     // Record this request
     this.requestTimestamps.push(now)
-
-    this.onRateLimit?.(this.requestTimestamps.length, this.maxRequests, false)
+    this.requestCount++
   }
 }
 
@@ -68,16 +53,9 @@ class RateLimiter {
  * @returns Array of parsed armory news items
  */
 export async function fetchHistoricalArmoryNews(factionId: string, options: FetchOptions): Promise<ArmoryNewsItem[]> {
-  const {
-    maxCount,
-    onProgress,
-    onError,
-    onRateLimit,
-    delayMs = 2000,
-    rateLimit = { requestsPerMinute: 10 }, // Default to 10 requests per minute
-  } = options
+  const { maxCount, onProgress, onError, delayMs = 5000, rateLimit = { requestsPerMinute: 10 } } = options
 
-  const rateLimiter = new RateLimiter(rateLimit.requestsPerMinute, onRateLimit)
+  const rateLimiter = new RateLimiter(rateLimit.requestsPerMinute)
 
   const allNews: ArmoryNewsItem[] = []
   const seenUuids = new Set<string>()
@@ -87,7 +65,6 @@ export async function fetchHistoricalArmoryNews(factionId: string, options: Fetc
   try {
     await rateLimiter.waitForSlot()
 
-    // Fetch latest news (fresh, not cached)
     console.log("[v0] Fetching latest armory news (fresh, not cached)")
     const rawNews = await fetchArmoryNews(factionId, undefined, true)
 
@@ -100,25 +77,28 @@ export async function fetchHistoricalArmoryNews(factionId: string, options: Fetc
         }
       }
 
-      // Sort by timestamp descending
       allNews.sort((a, b) => b.timestamp - a.timestamp)
 
-      // Set pagination timestamp
       if (allNews.length > 0) {
         const oldestInBatch = allNews[allNews.length - 1]
         lastOldestId = oldestInBatch.uuid
         toTimestamp = oldestInBatch.timestamp
       }
 
-      onProgress?.({ current: allNews.length, max: maxCount })
+      onProgress?.({
+        current: allNews.length,
+        max: maxCount,
+        requestNumber: rateLimiter.getRequestNumber(),
+        isCacheHit: false,
+      })
     }
 
     while (toTimestamp && allNews.length < maxCount) {
       const cacheKey = `armory_to_${toTimestamp}`
       const cachedData = typeof window !== "undefined" ? localStorage.getItem(`crime_api_cache_${cacheKey}`) : null
+      const isCacheHit = !!cachedData
 
       if (!cachedData) {
-        // Only apply rate limiting for fresh API calls, not cache hits
         await rateLimiter.waitForSlot()
       } else {
         console.log(`[v0] Cache HIT for timestamp ${toTimestamp} - skipping rate limit`)
@@ -132,7 +112,6 @@ export async function fetchHistoricalArmoryNews(factionId: string, options: Fetc
         break
       }
 
-      // Parse batch and filter out duplicates
       const parsedBatch = parseArmoryNewsItems(rawNews)
       const batch: ArmoryNewsItem[] = []
 
@@ -150,7 +129,6 @@ export async function fetchHistoricalArmoryNews(factionId: string, options: Fetc
 
       batch.sort((a, b) => b.timestamp - a.timestamp)
 
-      // Check if we've hit the end
       const oldestInBatch = batch[batch.length - 1]
       if (lastOldestId === oldestInBatch.uuid) {
         console.log("[v0] Reached end of pagination (same oldest ID)")
@@ -160,10 +138,18 @@ export async function fetchHistoricalArmoryNews(factionId: string, options: Fetc
       lastOldestId = oldestInBatch.uuid
       allNews.push(...batch)
 
-      onProgress?.({ current: allNews.length, max: maxCount })
+      onProgress?.({
+        current: allNews.length,
+        max: maxCount,
+        requestNumber: rateLimiter.getRequestNumber(),
+        isCacheHit,
+      })
 
-      // Update pagination timestamp
       toTimestamp = oldestInBatch.timestamp
+
+      if (toTimestamp && allNews.length < maxCount && !isCacheHit) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs))
+      }
     }
 
     allNews.sort((a, b) => b.timestamp - a.timestamp)
