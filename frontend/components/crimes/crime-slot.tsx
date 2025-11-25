@@ -5,9 +5,9 @@ import { useState } from "react"
 import { AlertTriangle } from "lucide-react"
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ProgressRing } from "./progress-ring"
-import { getPositionPassRateColor } from "@/lib/crime-colors"
+import { getPositionPassRateColor } from "@/lib/crimes/crime-colors"
 import { getWeightColor, getWeightBgColor } from "@/lib/role-weights"
-import { getRecommendedMembers, type MemberRecommendation, type CPRTrackerData } from "@/lib/cpr-tracker"
+import { getRecommendedMembers, type MemberRecommendation, type CPRTrackerData } from "@/lib/integration/cpr-tracker"
 
 interface CrimeSlotProps {
   slot: Slot

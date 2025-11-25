@@ -9,7 +9,8 @@ import { ResetConfirmationDialog } from "@/components/reset-confirmation-dialog"
 import { clearAllCache } from "@/lib/cache/cache-reset"
 import { handleFullLogout } from "@/lib/logout-handler"
 import type { MedicalItem, MedicalAlertSettings } from "@/lib/medical-types"
-import { DEFAULT_MEDICAL_ALERTS } from "@/lib/medical-types"
+import { DEFAULT_MEDICAL_ALERTS, ALL_BLOOD_BAGS, ALL_EMPTY_BLOOD_BAGS, ALL_FIRST_AID_KITS } from "@/lib/medical-types"
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
 
 export default function MedicalPage() {
   const router = useRouter()
@@ -122,33 +123,42 @@ export default function MedicalPage() {
     return item.quantity < threshold
   }
 
-  const getItemCategory = (item: MedicalItem): string => {
-    if (item.name.includes("Blood Bag") && item.name !== "Empty Blood Bag") {
-      return "Blood Bags (Filled)"
+  const getItemsForCategory = (
+    category: string,
+  ): Array<{ item: MedicalItem | null; template: { id: number; name: string } }> => {
+    const itemMap = new Map(medicalItems.map((item) => [item.ID, item]))
+
+    let templates: Array<{ id: number; name: string }> = []
+    if (category === "Blood Bags (Filled)") {
+      templates = ALL_BLOOD_BAGS
+    } else if (category === "Empty Blood Bags") {
+      templates = ALL_EMPTY_BLOOD_BAGS
+    } else if (category === "First Aid Kits") {
+      templates = ALL_FIRST_AID_KITS
+    } else {
+      // Other medical items - only show what exists
+      return medicalItems
+        .filter((item) => {
+          const isBloodBag = ALL_BLOOD_BAGS.some((bb) => bb.id === item.ID)
+          const isEmptyBag = ALL_EMPTY_BLOOD_BAGS.some((eb) => eb.id === item.ID)
+          const isFirstAid = ALL_FIRST_AID_KITS.some((fa) => fa.id === item.ID)
+          return !isBloodBag && !isEmptyBag && !isFirstAid
+        })
+        .map((item) => ({ item, template: { id: item.ID, name: item.name } }))
     }
-    if (item.name === "Empty Blood Bag") {
-      return "Empty Blood Bags"
-    }
-    if (item.name.includes("First Aid Kit") || item.name.includes("Bandage")) {
-      return "First Aid Kits"
-    }
-    return "Other Medical Items"
+
+    return templates.map((template) => ({
+      item: itemMap.get(template.id) || null,
+      template,
+    }))
   }
 
-  const groupedItems = medicalItems.reduce(
-    (acc, item) => {
-      const category = getItemCategory(item)
-      if (!acc[category]) {
-        acc[category] = []
-      }
-      acc[category].push(item)
-      return acc
-    },
-    {} as Record<string, MedicalItem[]>,
-  )
-
-  const categoryOrder = ["Blood Bags (Filled)", "Empty Blood Bags", "First Aid Kits", "Other Medical Items"]
-  const sortedCategories = Object.keys(groupedItems).sort((a, b) => categoryOrder.indexOf(a) - categoryOrder.indexOf(b))
+  const categories = [
+    { name: "Blood Bags (Filled)", items: getItemsForCategory("Blood Bags (Filled)") },
+    { name: "Empty Blood Bags", items: getItemsForCategory("Empty Blood Bags") },
+    { name: "First Aid Kits", items: getItemsForCategory("First Aid Kits") },
+    { name: "Other Medical Items", items: getItemsForCategory("Other Medical Items") },
+  ].filter((cat) => cat.items.length > 0)
 
   if (isLoading) {
     return (
@@ -169,7 +179,7 @@ export default function MedicalPage() {
               <h2 className="text-xl font-bold text-foreground">Configure Alert Thresholds</h2>
               <button
                 onClick={() => setShowSettingsModal(false)}
-                className="p-2 hover:bg-accent rounded-lg transition-colors"
+                className="p-2 rounded-lg transition-colors"
               >
                 <X size={20} />
               </button>
@@ -225,7 +235,7 @@ export default function MedicalPage() {
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push("/dashboard")}
-              className="p-2 hover:bg-accent rounded-lg transition-colors border border-border"
+              className="p-2 rounded-lg transition-colors border border-border"
               title="Back to Dashboard"
             >
               <ArrowLeft size={20} />
@@ -238,7 +248,7 @@ export default function MedicalPage() {
           <div className="relative">
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="p-2 hover:bg-accent rounded-lg transition-colors border border-border"
+              className="p-2 rounded-lg transition-colors border border-border"
               title="Menu"
             >
               <MoreVertical size={20} />
@@ -252,7 +262,7 @@ export default function MedicalPage() {
                       router.push("/dashboard/faction")
                       setDropdownOpen(false)
                     }}
-                    className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-accent transition-colors"
+                    className="w-full px-4 py-3 text-left flex items-center gap-2 transition-colors"
                   >
                     <Info size={18} />
                     Faction
@@ -262,7 +272,7 @@ export default function MedicalPage() {
                       setDropdownOpen(false)
                       setResetDialogOpen(true)
                     }}
-                    className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-accent transition-colors border-t border-border"
+                    className="w-full px-4 py-3 text-left flex items-center gap-2 transition-colors border-t border-border"
                   >
                     <RotateCcw size={18} />
                     Reset
@@ -321,72 +331,94 @@ export default function MedicalPage() {
               <p className="text-muted-foreground">Your faction medical inventory is empty</p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {sortedCategories.map((category) => (
-                <div key={category} className="bg-card border border-border rounded-lg p-6">
-                  <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-                    {category}
-                    <span className="text-sm text-muted-foreground font-normal">
-                      ({groupedItems[category].length} items)
-                    </span>
-                  </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-                    {groupedItems[category].map((item) => {
-                      const lowStock = isLowStock(item)
-                      return (
-                        <div
-                          key={item.ID}
-                          className={`bg-background border rounded-lg p-3 transition-all hover:scale-105 ${
-                            lowStock
-                              ? "border-red-500/50 bg-red-500/5 ring-1 ring-red-500/20"
-                              : "border-border hover:border-primary/50"
-                          }`}
-                        >
-                          <div className="flex flex-col items-center gap-2">
-                            {/* Item thumbnail */}
-                            <div className="relative">
-                              <img
-                                src={`https://www.torn.com/images/items/${item.ID}/large.png`}
-                                alt={item.name}
-                                className="w-16 h-16 object-contain"
-                                onError={(e) => {
-                                  e.currentTarget.src = "/placeholder.svg?height=64&width=64"
-                                }}
-                              />
-                              {lowStock && (
-                                <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-1">
-                                  <AlertTriangle size={12} className="text-white" />
-                                </div>
-                              )}
-                            </div>
+            <Accordion type="multiple" defaultValue={categories.map((cat) => cat.name)} className="space-y-4">
+              {categories.map((category) => (
+                <AccordionItem
+                  key={category.name}
+                  value={category.name}
+                  className="bg-card border border-border rounded-lg overflow-hidden"
+                >
+                  <AccordionTrigger className="px-6 py-4 transition-colors">
+                    <div className="flex items-center justify-between w-full pr-4">
+                      <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                        {category.name}
+                        <span className="text-sm text-muted-foreground font-normal">
+                          ({category.items.filter((i) => i.item !== null).length}/{category.items.length})
+                        </span>
+                      </h3>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-6 pb-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                      {category.items.map(({ item, template }) => {
+                        const quantity = item?.quantity ?? 0
+                        const isMissing = item === null || quantity === 0
+                        const lowStock = item ? isLowStock(item) : false
+                        return (
+                          <div
+                            key={template.id}
+                            className={`bg-background border rounded-lg p-3 transition-all ${
+                              isMissing
+                                ? "opacity-40 border-border/50"
+                                : lowStock
+                                  ? "border-red-500/50 bg-red-500/5 ring-1 ring-red-500/20 hover:scale-105"
+                                  : "border-border hover:border-primary/50 hover:scale-105"
+                            }`}
+                          >
+                            <div className="flex flex-col items-center gap-2">
+                              {/* Item thumbnail */}
+                              <div className="relative">
+                                <img
+                                  src={`https://www.torn.com/images/items/${template.id}/large.png`}
+                                  alt={template.name}
+                                  className={`w-16 h-16 object-contain ${isMissing ? "grayscale" : ""}`}
+                                  onError={(e) => {
+                                    e.currentTarget.src = "/placeholder.svg?height=64&width=64"
+                                  }}
+                                />
+                                {!isMissing && lowStock && (
+                                  <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-1">
+                                    <AlertTriangle size={12} className="text-white" />
+                                  </div>
+                                )}
+                              </div>
 
-                            {/* Item name */}
-                            <div className="text-center w-full">
-                              <p
-                                className="font-semibold text-foreground text-xs leading-tight line-clamp-2"
-                                title={item.name}
-                              >
-                                {item.name}
-                              </p>
-                            </div>
+                              {/* Item name */}
+                              <div className="text-center w-full">
+                                <p
+                                  className={`font-semibold text-xs leading-tight line-clamp-2 ${
+                                    isMissing ? "text-muted-foreground" : "text-foreground"
+                                  }`}
+                                  title={template.name}
+                                >
+                                  {template.name}
+                                </p>
+                              </div>
 
-                            {/* Quantity */}
-                            <div className="text-center w-full">
-                              <p className={`text-xl font-bold ${lowStock ? "text-red-500" : "text-primary"}`}>
-                                {item.quantity.toLocaleString()}
-                              </p>
-                              {alertSettings[item.ID] > 0 && (
-                                <p className="text-[10px] text-muted-foreground">Alert: {alertSettings[item.ID]}</p>
-                              )}
+                              {/* Quantity */}
+                              <div className="text-center w-full">
+                                <p
+                                  className={`text-xl font-bold ${
+                                    isMissing ? "text-muted-foreground" : lowStock ? "text-red-500" : "text-primary"
+                                  }`}
+                                >
+                                  {quantity.toLocaleString()}
+                                </p>
+                                {alertSettings[template.id] > 0 && (
+                                  <p className="text-[10px] text-muted-foreground">
+                                    Alert: {alertSettings[template.id]}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
+                        )
+                      })}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
               ))}
-            </div>
+            </Accordion>
           )}
         </div>
       </main>

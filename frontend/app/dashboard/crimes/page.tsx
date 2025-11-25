@@ -16,8 +16,8 @@ import { handleFullLogout } from "@/lib/logout-handler"
 import { fetchAndCacheFactionBasic } from "@/lib/cache/faction-basic-cache"
 import type { Crime, Member } from "@/types/crime"
 import { DATE_FILTER_OPTIONS } from "@/constants/date-filters"
-import { filterCrimesByDateRange } from "@/lib/crime-filters"
-import { getCPRTrackerData, type CPRTrackerData } from "@/lib/cpr-tracker"
+import { filterCrimesByDateRange } from "@/lib/crimes/crime-filters"
+import { getCPRTrackerData, type CPRTrackerData } from "@/lib/integration/cpr-tracker"
 
 export default function CrimesPage() {
   const router = useRouter()

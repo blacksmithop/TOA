@@ -13,7 +13,7 @@ import { ResetConfirmationDialog } from "@/components/reset-confirmation-dialog"
 import { clearAllCache } from "@/lib/cache/cache-reset"
 import { handleFullLogout } from "@/lib/logout-handler"
 import { canAccessBalance } from "@/lib/api-scopes"
-import { fetchFFScouterStats } from "@/lib/ffscouter"
+import { fetchFFScouterStats } from "@/lib/integration/ffscouter"
 import { fetchYataMembers } from "@/lib/yata"
 
 interface Member {
