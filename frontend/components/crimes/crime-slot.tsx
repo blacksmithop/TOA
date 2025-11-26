@@ -2,11 +2,10 @@
 
 import type { Slot, Member } from "@/types/crime"
 import { useState } from "react"
-import { AlertTriangle } from "lucide-react"
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { AlertTriangle, Plane } from "lucide-react"
 import { ProgressRing } from "./progress-ring"
 import { getPositionPassRateColor } from "@/lib/crimes/colors"
-import { getWeightColor, getWeightBgColor } from "@/lib/role-weights"
+import { getWeightColor, getWeightBgColor } from "@/lib/crimes/role-weights"
 import { getRecommendedMembers, type MemberRecommendation, type CPRTrackerData } from "@/lib/integration/cpr-tracker"
 
 interface CrimeSlotProps {
@@ -74,6 +73,9 @@ export default function CrimeSlot({
     }
   }
 
+  const memberData = slot.user?.id ? members.find((m) => m.id === slot.user.id) : null
+  const isFlying = memberData?.status?.state === "Traveling"
+
   return (
     <div className="space-y-1">
       <div
@@ -100,27 +102,11 @@ export default function CrimeSlot({
             )}
             {slot.user ? (
               <>
-            {isAtRisk && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-orange-400 cursor-help"><AlertTriangle size={14} className="text-red-400 shrink-0" /></span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Low CPR</p>
-                </TooltipContent>
-              </Tooltip>
-            )}
-
-            {isHighRiskRole && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <AlertTriangle size={14} className="text-red-400 shrink-0" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>High weight role with low CPR!</p>
-                </TooltipContent>
-              </Tooltip>
-            )}
+                {isAtRisk && <span className="text-orange-400">⚠️</span>}
+                {isHighRiskRole && (
+                  <AlertTriangle size={14} className="text-red-400 shrink-0" title="High weight role with low CPR!" />
+                )}
+                {isFlying && <Plane size={14} className="text-blue-400 shrink-0" title="Member is traveling" />}
                 <a
                   href={`https://www.torn.com/profiles.php?XID=${slot.user.id}`}
                   target="_blank"

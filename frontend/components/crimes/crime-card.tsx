@@ -8,8 +8,8 @@ import CrimeRewards from "./crime-rewards"
 import CrimeTimestamps from "./crime-timestamps"
 import { canReloadIndividualCrimes } from "@/lib/api-scopes"
 import { getSimulatorUrl } from "@/lib/crimes/simulator-urls"
-import { getRoleWeight, shouldAlertLowCPR } from "@/lib/role-weights"
-import { getSuccessPrediction, SUPPORTED_SCENARIOS, type SuccessPrediction } from "@/lib/success-prediction"
+import { getRoleWeight, shouldAlertLowCPR } from "@/lib/crimes/role-weights"
+import { getSuccessPrediction, SUPPORTED_SCENARIOS, type SuccessPrediction } from "@/lib/crimes/success-prediction"
 import { getDifficultyColor, getPassRateColor } from "@/lib/crimes/colors"
 
 interface CrimeCardProps {
@@ -22,7 +22,7 @@ interface CrimeCardProps {
   isReloading: boolean
   minPassRate: number
   factionId: number | null
-  roleWeights: Awaited<ReturnType<typeof import("@/lib/role-weights").getRoleWeights>> | null
+  roleWeights: Awaited<ReturnType<typeof import("@/lib/crimes/role-weights").getRoleWeights>> | null
   membersNotInOCSet: Set<number>
   cprTrackerData: any
   cprTrackerEnabled: boolean
@@ -189,7 +189,7 @@ export default function CrimeCard({
         </div>
       </div>
 
-      <CrimeTimestamps crime={crime} currentTime={currentTime} />
+      <CrimeTimestamps crime={crime} currentTime={currentTime} memberMap={new Map(members.map((m) => [m.id, m]))} />
 
       {crime.status === "Successful" && crime.rewards && (
         <CrimeRewards rewards={crime.rewards} items={items} onItemClick={onItemClick} memberMap={memberMap} />

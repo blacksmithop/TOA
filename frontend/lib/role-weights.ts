@@ -1,4 +1,3 @@
-// Role weight data with fallback
 const STATIC_ROLE_WEIGHTS = {
   "Mob Mentality": {
     Looter1: 33.97,
