@@ -15,9 +15,11 @@ import { clearAllCache } from "@/lib/cache/cache-reset"
 import { handleFullLogout } from "@/lib/logout-handler"
 import { fetchAndCacheFactionBasic } from "@/lib/cache/faction-basic-cache"
 import type { Crime, Member } from "@/types/crime"
-import { filterCrimesByDateRange } from "@/lib/crimes/filters"
 import { getCPRTrackerData, type CPRTrackerData } from "@/lib/integration/cpr-tracker"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { CrimeDateFilter } from "@/components/crimes/crime-date-filter"
+import { getMembersNotInOC } from "@/lib/crimes/members-not-in-oc" // Import the missing function
+import { isValid } from "date-fns" // Import isValid function from date-fns
 
 export default function CrimesPage() {
   const router = useRouter()
@@ -52,6 +54,8 @@ export default function CrimesPage() {
   const [cprTrackerData, setCprTrackerData] = useState<CPRTrackerData | null>(null)
   const [cprTrackerEnabled, setCprTrackerEnabled] = useState(false)
   const [memberMap, setMemberMap] = useState<Map<number, Member>>(new Map())
+  const [customDateRange, setCustomDateRange] = useState<{ start: Date; end: Date } | null>(null)
+  const [membersNotInOC, setMembersNotInOC] = useState<Member[]>([]) // Declare the missing variable
 
   useEffect(() => {
     const apiKey = localStorage.getItem("factionApiKey")
@@ -275,6 +279,9 @@ export default function CrimesPage() {
       console.log(`[v0] fetchData: Final crime count = ${allCrimes.length}`)
       setCrimes(allCrimes)
 
+      const membersNotInOCData = getMembersNotInOC(members, allCrimes)
+      setMembersNotInOC(membersNotInOCData)
+
       if (!refreshing && !isBackgroundRefresh) {
         toast({
           title: "Success",
@@ -430,46 +437,69 @@ export default function CrimesPage() {
     ? crimes.filter((crime) => crime.slots.some((slot) => slot.user?.id === filteredMemberId))
     : crimes
 
+  const { minDate, maxDate } = useMemo(() => {
+    if (crimes.length === 0) {
+      const now = new Date()
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      return { minDate: thirtyDaysAgo, maxDate: now }
+    }
+
+    const timestamps = crimes.map((crime) => crime.created_at * 1000)
+    return {
+      minDate: new Date(Math.min(...timestamps)),
+      maxDate: new Date(Math.max(...timestamps)),
+    }
+  }, [crimes])
+
+  const initialStartDate = useMemo(() => {
+    if (customDateRange?.start && isValid(customDateRange.start)) {
+      return customDateRange.start
+    }
+    return minDate
+  }, [customDateRange, minDate])
+
+  const initialEndDate = useMemo(() => {
+    if (customDateRange?.end && isValid(customDateRange.end)) {
+      return customDateRange.end
+    }
+    return maxDate
+  }, [customDateRange, maxDate])
+
   const dateFilteredCrimes = useMemo(() => {
-    return filterCrimesByDateRange(filteredCrimes, dateFilter)
-  }, [filteredCrimes, dateFilter])
+    if (!customDateRange?.start || !customDateRange?.end) {
+      return filteredCrimes
+    }
 
-  const membersNotInOC = useMemo(() => {
-    // Filter positions to exclude
-    const excludedPositions = ["Recruit"]
-    const excludedStates = ["Hospital", "Jail", "Fallen"]
+    console.log("[v0] Filtering crimes with date range:", {
+      start: customDateRange.start,
+      end: customDateRange.end,
+      totalCrimes: filteredCrimes.length,
+    })
 
-    // Get member IDs from Planning and Recruiting crimes
-    const membersInCrimes = new Set<number>()
-    crimes
-      .filter((crime) => crime.status === "Planning" || crime.status === "Recruiting")
-      .forEach((crime) => {
-        crime.slots.forEach((slot) => {
-          if (slot.user?.id) {
-            membersInCrimes.add(slot.user.id)
-          }
-        })
-      })
+    return filteredCrimes.filter((crime) => {
+      // Convert epoch seconds to milliseconds for comparison
+      const crimeDate = new Date(crime.created_at * 1000)
+      const isInRange = crimeDate >= customDateRange.start && crimeDate <= customDateRange.end
 
-    // Filter members not in OCs
-    return members
-      .filter((member) => {
-        // Exclude by position
-        if (excludedPositions.includes(member.position)) return false
+      return isInRange
+    })
+  }, [filteredCrimes, customDateRange])
 
-        // Exclude by status
-        if (excludedStates.includes(member.status?.state)) return false
+  const handleDateRangeChange = (start: Date, end: Date) => {
+    console.log("[v0] Date range changed:", { start, end })
+    setCustomDateRange({ start, end })
+  }
 
-        // Primary check: is_in_oc field
-        if (member.is_in_oc) return false
-
-        // Additional validation: check if in Planning/Recruiting crimes
-        if (membersInCrimes.has(member.id)) return false
-
-        return true
-      })
-      .sort((a, b) => b.last_action.timestamp - a.last_action.timestamp)
-  }, [members, crimes])
+  useEffect(() => {
+    if (crimes.length > 0 && !customDateRange) {
+      const start = new Date(minDate)
+      const end = new Date(maxDate)
+      start.setHours(0, 0, 0, 0)
+      end.setHours(23, 59, 59, 999)
+      console.log("[v0] Initializing date range:", { start, end, crimesCount: crimes.length })
+      setCustomDateRange({ start, end })
+    }
+  }, [crimes.length, minDate, maxDate, customDateRange])
 
   if (isLoading) {
     return (
@@ -542,6 +572,16 @@ export default function CrimesPage() {
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-7xl mx-auto">
+          <div className="mb-6">
+            <CrimeDateFilter
+              minDate={minDate}
+              maxDate={maxDate}
+              startDate={initialStartDate}
+              endDate={initialEndDate}
+              onDateRangeChange={handleDateRangeChange}
+            />
+          </div>
+
           <CrimeSummary
             crimes={dateFilteredCrimes}
             items={items}
