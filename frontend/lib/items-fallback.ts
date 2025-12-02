@@ -51,3 +51,4 @@ export function getItemName(itemId: number, fallbackName?: string): string {
 
 export function getItemImageUrl(itemId: number): string {
   return `https://www.torn.com/images/items/${itemId}/large.png`
+}
