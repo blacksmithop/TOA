@@ -158,17 +158,7 @@ export function WithdrawUrlGenerator() {
   const memberBalance = getSelectedMemberBalance()
 
   return (
-    <div className="bg-card border border-border rounded-lg p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <DollarSign className="h-8 w-8 text-green-500" />
-        <div>
-          <h2 className="text-2xl font-bold text-foreground">Withdraw</h2>
-          <p className="text-sm text-muted-foreground">
-            Faction Balance: <span className="font-bold text-green-400">{formatCurrency(balance.total)}</span>
-          </p>
-        </div>
-      </div>
-
+    <>
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-semibold text-foreground mb-2">Select Member</label>
@@ -267,6 +257,6 @@ export function WithdrawUrlGenerator() {
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }

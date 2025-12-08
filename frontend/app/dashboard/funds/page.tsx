@@ -21,6 +21,7 @@ import { clearAllCache } from "@/lib/cache/cache-reset"
 import { handleFullLogout } from "@/lib/logout-handler"
 import { parseFundsNews, type FundsNewsEntry } from "@/lib/funds-parser"
 import { WithdrawUrlGenerator } from "@/components/withdraw-url-generator"
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
 
 export default function FundsPage() {
   const router = useRouter()
@@ -368,7 +369,18 @@ export default function FundsPage() {
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-4xl mx-auto space-y-6">
-          <WithdrawUrlGenerator />
+          <Accordion type="single" collapsible className="bg-card border border-border rounded-lg">
+            <AccordionItem value="withdraw" className="border-0">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl font-bold text-foreground">Withdraw</span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <WithdrawUrlGenerator />
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
 
           <div className="bg-card border border-border rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
@@ -506,8 +518,8 @@ export default function FundsPage() {
                         </div>
                       )}
                     </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className="text-xs text-muted-foreground mb-1">{formatDateTime(entry.timestamp)}</div>
+                    <div className="text-xs text-muted-foreground text-right whitespace-nowrap">
+                      {formatDateTime(entry.timestamp)}
                     </div>
                   </div>
                 </div>
