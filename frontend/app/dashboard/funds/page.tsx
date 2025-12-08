@@ -1,14 +1,26 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from 'next/navigation'
+import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { LogOut, MoreVertical, ArrowLeft, Info, RotateCcw, Package, TrendingUp, TrendingDown, X, Settings } from 'lucide-react'
+import {
+  LogOut,
+  MoreVertical,
+  ArrowLeft,
+  Info,
+  RotateCcw,
+  Package,
+  TrendingUp,
+  TrendingDown,
+  X,
+  Settings,
+} from "lucide-react"
 import { handleApiError, validateApiResponse } from "@/lib/api-error-handler"
 import { ResetConfirmationDialog } from "@/components/reset-confirmation-dialog"
 import { clearAllCache } from "@/lib/cache/cache-reset"
 import { handleFullLogout } from "@/lib/logout-handler"
 import { parseFundsNews, type FundsNewsEntry } from "@/lib/funds-parser"
+import { WithdrawUrlGenerator } from "@/components/withdraw-url-generator"
 
 export default function FundsPage() {
   const router = useRouter()
@@ -33,7 +45,7 @@ export default function FundsPage() {
 
     const savedMaxItems = localStorage.getItem("fundsMaxItems")
     if (savedMaxItems) {
-      const max = parseInt(savedMaxItems)
+      const max = Number.parseInt(savedMaxItems)
       setMaxItems(max)
       setTempMaxItems(max)
     }
@@ -200,15 +212,13 @@ export default function FundsPage() {
     setSelectedFilters(newFilters)
   }
 
-  const filteredFunds = selectedFilters.size === 0 
-    ? funds 
-    : funds.filter(entry => selectedFilters.has(entry.action))
+  const filteredFunds = selectedFilters.size === 0 ? funds : funds.filter((entry) => selectedFilters.has(entry.action))
 
-  const actionTypes = Array.from(new Set(funds.map(f => f.action)))
+  const actionTypes = Array.from(new Set(funds.map((f) => f.action)))
 
   const formatNaturalDescription = (entry: FundsNewsEntry) => {
     const { user, target, action, money, crimeScenario } = entry
-    
+
     switch (action) {
       case "deposited":
         return (
@@ -358,6 +368,8 @@ export default function FundsPage() {
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-4xl mx-auto space-y-6">
+          <WithdrawUrlGenerator />
+
           <div className="bg-card border border-border rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
@@ -380,9 +392,7 @@ export default function FundsPage() {
 
             {showSettings && (
               <div className="mb-4 p-4 bg-background rounded-lg border border-border">
-                <label className="block text-sm font-semibold text-foreground mb-2">
-                  Maximum Logs to Fetch
-                </label>
+                <label className="block text-sm font-semibold text-foreground mb-2">Maximum Logs to Fetch</label>
                 <div className="flex items-center gap-3">
                   <input
                     type="number"
@@ -390,7 +400,7 @@ export default function FundsPage() {
                     max="10000"
                     step="100"
                     value={tempMaxItems}
-                    onChange={(e) => setTempMaxItems(parseInt(e.target.value) || 1000)}
+                    onChange={(e) => setTempMaxItems(Number.parseInt(e.target.value) || 1000)}
                     className="flex-1 px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                   <button
@@ -472,12 +482,13 @@ export default function FundsPage() {
           ) : (
             <div className="space-y-3">
               {filteredFunds.map((entry) => (
-                <div key={entry.uuid} className="bg-card border border-border rounded-lg p-4 hover:border-primary/50 transition-all">
+                <div
+                  key={entry.uuid}
+                  className="bg-card border border-border rounded-lg p-4 hover:border-primary/50 transition-all"
+                >
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div className="flex-1">
-                      <div className="text-base leading-relaxed mb-2">
-                        {formatNaturalDescription(entry)}
-                      </div>
+                      <div className="text-base leading-relaxed mb-2">{formatNaturalDescription(entry)}</div>
                       {entry.oldBalance !== null && entry.newBalance !== null && (
                         <div className="flex items-center gap-2 text-sm mt-2 p-2 bg-background/50 rounded border border-border/50">
                           <span className="text-muted-foreground">Balance:</span>
@@ -487,7 +498,9 @@ export default function FundsPage() {
                           ) : (
                             <TrendingUp size={14} className="text-green-400" />
                           )}
-                          <span className={`font-mono font-bold ${entry.action === "decreased" ? "text-red-400" : "text-green-400"}`}>
+                          <span
+                            className={`font-mono font-bold ${entry.action === "decreased" ? "text-red-400" : "text-green-400"}`}
+                          >
                             {formatCurrency(entry.newBalance)}
                           </span>
                         </div>

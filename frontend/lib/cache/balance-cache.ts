@@ -2,7 +2,9 @@ export interface FactionBalance {
   total: number
   members: Array<{
     id: number
+    username: string
     money: number
+    points: number
   }>
 }
 
