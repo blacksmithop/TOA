@@ -1,20 +1,9 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import {
-  RefreshCw,
-  LogOut,
-  MoreVertical,
-  Info,
-  Play,
-  Loader2,
-  ChevronDown,
-  ArrowLeft,
-  ArrowUp,
-  ArrowDown,
-} from "lucide-react"
+import { RefreshCw, LogOut, MoreVertical, Info, Play, Loader2, ChevronDown, ArrowLeft, ArrowUpDown } from "lucide-react"
 import { fetchAndCacheItems } from "@/lib/cache/items-cache"
 import type { TornItem } from "@/lib/cache/items-cache"
 import { VictoryPie } from "victory"
@@ -22,11 +11,11 @@ import ItemModal from "@/components/crimes/item-modal"
 import { crimeApiCache } from "@/lib/cache/crime-api-cache"
 import { handleFullLogout } from "@/lib/logout-handler"
 import type { Crime } from "@/types/crime"
-import { DATE_FILTER_OPTIONS } from "@/constants/date-filters"
 import { filterCrimesByDateRange } from "@/lib/crimes/filters"
 import { formatCurrency } from "@/lib/crimes/formatters"
 import { getDifficultyColor } from "@/lib/crimes/colors"
 import { CRIME_METADATA } from "@/lib/crimes/metadata"
+import CrimeSuccessCharts from "@/components/crimes/crime-success-charts"
 
 export default function ReportsPage() {
   const router = useRouter()
@@ -47,6 +36,7 @@ export default function ReportsPage() {
   const [sortBy, setSortBy] = useState<string>("Total")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
   const [dateFilter, setDateFilter] = useState<number>(0)
+  const [searchFilter, setSearchFilter] = useState<string>("")
 
   const WEEK_IN_SECONDS = 7 * 24 * 60 * 60
   const REQUEST_DELAY = 2000
@@ -155,6 +145,7 @@ export default function ReportsPage() {
     let totalMoney = 0
     let totalRespect = 0
     let totalItemValue = 0
+    let totalCost = 0
     const statusCounts = {
       Planning: 0,
       Recruiting: 0,
@@ -196,6 +187,10 @@ export default function ReportsPage() {
           })
         }
       }
+
+      if (crime.status === "Planning" && crime.cost) {
+        totalCost += crime.cost
+      }
     })
 
     const totalValue = totalMoney + totalItemValue
@@ -205,6 +200,7 @@ export default function ReportsPage() {
       totalMoney,
       totalItemValue,
       totalRespect,
+      totalCost,
       statusCounts,
       itemsGained: Array.from(itemsGained.values()),
     }
@@ -263,6 +259,12 @@ export default function ReportsPage() {
           : "N/A",
     }))
 
+    if (searchFilter.trim() !== "") {
+      filteredStats = filteredStats.filter((crime) =>
+        crime.name.toLowerCase().includes(searchFilter.toLowerCase().trim()),
+      )
+    }
+
     if (difficultyFilter !== "All") {
       filteredStats = filteredStats.filter((crime) => {
         const diff = crime.difficulty
@@ -293,7 +295,7 @@ export default function ReportsPage() {
     }
 
     return filteredStats
-  }, [crimes, difficultyFilter, sortBy, sortDirection])
+  }, [crimes, difficultyFilter, sortBy, sortDirection, searchFilter])
 
   const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -493,16 +495,37 @@ export default function ReportsPage() {
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-5xl mx-auto space-y-6">
-          <div className="bg-card border border-border rounded-lg p-8 text-center">
-            <h2 className="text-xl font-semibold text-muted-foreground mb-4">Total Crimes</h2>
-            <div className="text-6xl font-bold text-primary mb-2">{totalCrimes.toLocaleString()}</div>
-            {isLoading && (
-              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mt-4">
-                <Loader2 size={16} className="animate-spin" />
-                <span>Fetching week {currentWeek}...</span>
+          {crimes.length > 0 && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-card border border-border rounded-lg p-4">
+                  <div className="text-sm font-medium text-muted-foreground">Total Crimes</div>
+                  <div className="text-2xl font-bold text-primary">{totalCrimes.toLocaleString()}</div>
+                </div>
+                <div className="bg-card border border-border rounded-lg p-4">
+                  <div className="text-sm font-medium text-muted-foreground">Total Value</div>
+                  <div className="text-2xl font-bold text-green-500">{formatCurrency(summary.totalValue)}</div>
+                </div>
+                <div className="bg-card border border-border rounded-lg p-4">
+                  <div className="text-sm font-medium text-muted-foreground">Direct Money</div>
+                  <div className="text-2xl font-bold text-green-500">{formatCurrency(summary.totalMoney)}</div>
+                </div>
+                <div className="bg-card border border-border rounded-lg p-4">
+                  <div className="text-sm font-medium text-muted-foreground">Item Value</div>
+                  <div className="text-2xl font-bold text-orange-500">{formatCurrency(summary.totalItemValue)}</div>
+                </div>
               </div>
-            )}
-          </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-card border border-border rounded-lg p-4">
+                  <div className="text-sm font-medium text-muted-foreground">Total Respect</div>
+                  <div className="text-2xl font-bold text-blue-500">{formatNumber(summary.totalRespect)}</div>
+                </div>
+              </div>
+
+              <CrimeSuccessCharts crimes={crimes} />
+            </>
+          )}
 
           <div className="bg-card border border-border rounded-lg p-6 space-y-4">
             <div className="flex items-center justify-between">
@@ -530,29 +553,16 @@ export default function ReportsPage() {
               This will fetch all completed crimes by cycling back in time using the oldest timestamp. The process may
               take several minutes depending on your faction's history. Requests are spaced 2 seconds apart.
             </p>
+            {isLoading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 size={16} className="animate-spin" />
+                <span>Fetching week {currentWeek}...</span>
+              </div>
+            )}
           </div>
 
           {crimes.length > 0 && (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="bg-card p-3 rounded-lg border border-border/50">
-                  <div className="text-xs text-muted-foreground mb-1">Total Value</div>
-                  <div className="text-lg font-bold text-green-400">{formatCurrency(summary.totalValue)}</div>
-                </div>
-                <div className="bg-card p-3 rounded-lg border border-border/50">
-                  <div className="text-xs text-muted-foreground mb-1">Direct Money</div>
-                  <div className="text-lg font-bold text-green-400">{formatCurrency(summary.totalMoney)}</div>
-                </div>
-                <div className="bg-card p-3 rounded-lg border border-border/50">
-                  <div className="text-xs text-muted-foreground mb-1">Item Value</div>
-                  <div className="text-lg font-bold text-orange-400">{formatCurrency(summary.totalItemValue)}</div>
-                </div>
-                <div className="bg-card p-3 rounded-lg border border-border/50">
-                  <div className="text-xs text-muted-foreground mb-1">Total Respect</div>
-                  <div className="text-lg font-bold text-blue-400">{formatNumber(summary.totalRespect)}</div>
-                </div>
-              </div>
-
               <div className="bg-card p-3 rounded-lg border border-border/50">
                 <div className="text-xs text-muted-foreground mb-2 font-bold">Status Breakdown</div>
                 <div className="flex flex-wrap gap-3 text-sm">
@@ -579,19 +589,26 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-foreground">Crime-Specific Analysis</h3>
-                </div>
+              <div className="bg-card border border-border rounded-lg p-4 space-y-4">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">Search Crime</label>
+                    <input
+                      type="text"
+                      value={searchFilter}
+                      onChange={(e) => setSearchFilter(e.target.value)}
+                      placeholder="Search by crime name..."
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-card border border-border/50 rounded-lg p-4">
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1.5 block">Sort By</label>
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">Sort By</label>
                     <div className="flex gap-2">
                       <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value)}
-                        className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                       >
                         <option value="Total">Total Count</option>
                         <option value="Difficulty">Difficulty</option>
@@ -599,21 +616,23 @@ export default function ReportsPage() {
                         <option value="Name">Name</option>
                       </select>
                       <button
-                        onClick={() => setSortDirection(sortDirection === "desc" ? "asc" : "desc")}
-                        className="px-3 py-2 bg-background border border-border rounded-lg hover:bg-accent transition-colors"
-                        title={sortDirection === "desc" ? "Sort Descending" : "Sort Ascending"}
+                        onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
+                        className="bg-background border border-border rounded-lg px-3 py-2 hover:bg-accent transition-colors"
+                        title={sortDirection === "asc" ? "Ascending" : "Descending"}
                       >
-                        {sortDirection === "desc" ? <ArrowDown size={18} /> : <ArrowUp size={18} />}
+                        <ArrowUpDown size={16} className="text-foreground" />
                       </button>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1.5 block">Filter by Difficulty</label>
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                      Filter by Difficulty
+                    </label>
                     <select
                       value={difficultyFilter}
                       onChange={(e) => setDifficultyFilter(e.target.value)}
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     >
                       <option value="All">All Difficulties</option>
                       <option value="Easy (1-2)">Easy (1-2)</option>
@@ -622,225 +641,210 @@ export default function ReportsPage() {
                       <option value="Expert (9-10)">Expert (9-10)</option>
                     </select>
                   </div>
-
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1.5 block">Filter by Date</label>
-                    <select
-                      value={dateFilter}
-                      onChange={(e) => setDateFilter(Number(e.target.value))}
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      {DATE_FILTER_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
                 </div>
-
-                {crimeStats.map((crime) => {
-                  const isExpanded = expandedCrimes.has(crime.name)
-                  const metadata = CRIME_METADATA[crime.name]
-                  const pieData = []
-                  const colors = []
-
-                  if (crime.successful > 0) {
-                    pieData.push({
-                      x: "Success",
-                      y: crime.successful,
-                      label: `Success: ${crime.successful}`,
-                    })
-                    colors.push("#22c55e")
-                  }
-
-                  if (crime.failed > 0) {
-                    pieData.push({
-                      x: "Failed",
-                      y: crime.failed,
-                      label: `Failed: ${crime.failed}`,
-                    })
-                    colors.push("#ef4444")
-                  }
-
-                  if (crime.planning > 0) {
-                    pieData.push({
-                      x: "Planning",
-                      y: crime.planning,
-                      label: `Planning: ${crime.planning}`,
-                    })
-                    colors.push("#3b82f6")
-                  }
-
-                  if (crime.recruiting > 0) {
-                    pieData.push({
-                      x: "Recruiting",
-                      y: crime.recruiting,
-                      label: `Recruiting: ${crime.recruiting}`,
-                    })
-                    colors.push("#a855f7")
-                  }
-
-                  if (crime.expired > 0) {
-                    pieData.push({
-                      x: "Expired",
-                      y: crime.expired,
-                      label: `Expired: ${crime.expired}`,
-                    })
-                    colors.push("#6b7280")
-                  }
-
-                  const crimeInstances = crimes.filter((c) => c.name === crime.name && c.status === "Successful")
-                  const totalMoney = crimeInstances.reduce((sum, c) => sum + (c.rewards?.money || 0), 0)
-                  const avgMoney = crimeInstances.length > 0 ? totalMoney / crimeInstances.length : 0
-
-                  return (
-                    <div key={crime.name} className="bg-card border border-border/50 rounded-lg overflow-hidden">
-                      <button
-                        onClick={() => toggleCrime(crime.name)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-accent/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-semibold text-foreground">{crime.name}</h4>
-                            <span className={`text-sm font-bold ${getDifficultyColor(crime.difficulty)}`}>
-                              (Diff: {crime.difficulty})
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 text-sm">
-                            {crime.successful > 0 && (
-                              <span className="text-green-400 font-bold">{crime.successful} Success</span>
-                            )}
-                            {crime.failed > 0 && <span className="text-red-400 font-bold">{crime.failed} Failed</span>}
-                            {crime.planning > 0 && (
-                              <span className="text-blue-400 font-bold">{crime.planning} Planning</span>
-                            )}
-                            {crime.recruiting > 0 && (
-                              <span className="text-purple-400 font-bold">{crime.recruiting} Recruiting</span>
-                            )}
-                            {crime.expired > 0 && (
-                              <span className="text-gray-400 font-bold">{crime.expired} Expired</span>
-                            )}
-                            {crime.successRate !== "N/A" && (
-                              <span className="text-muted-foreground">({crime.successRate}%)</span>
-                            )}
-                          </div>
-                        </div>
-                        <ChevronDown
-                          size={20}
-                          className={`transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
-                        />
-                      </button>
-
-                      {isExpanded && pieData.length > 0 && (
-                        <div className="p-6 border-t border-border/50 animate-in fade-in duration-200">
-                          {metadata && (
-                            <div className="mb-6 space-y-4">
-                              <div className="bg-background/50 rounded-lg p-4 border border-border">
-                                <h5 className="text-sm font-bold text-primary mb-2">Description</h5>
-                                <p className="text-sm text-muted-foreground leading-relaxed">{metadata.description}</p>
-                              </div>
-
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <div className="bg-background/50 rounded-lg p-3 border border-border">
-                                  <div className="text-xs text-muted-foreground mb-1">Spawn Level</div>
-                                  <div className="text-lg font-bold text-cyan-400">
-                                    {metadata.spawn.name} (Lvl {metadata.spawn.level})
-                                  </div>
-                                </div>
-                                <div className="bg-background/50 rounded-lg p-3 border border-border">
-                                  <div className="text-xs text-muted-foreground mb-1">Scope Cost</div>
-                                  <div className="text-lg font-bold text-orange-400">{metadata.scope.cost}</div>
-                                </div>
-                                <div className="bg-background/50 rounded-lg p-3 border border-border">
-                                  <div className="text-xs text-muted-foreground mb-1">Scope Return</div>
-                                  <div className="text-lg font-bold text-green-400">{metadata.scope.return}</div>
-                                </div>
-                                <div className="bg-background/50 rounded-lg p-3 border border-border">
-                                  <div className="text-xs text-muted-foreground mb-1">Prerequisite</div>
-                                  <div className="text-sm font-bold text-yellow-400">
-                                    {metadata.prerequisite || "None"}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="bg-background/50 rounded-lg p-4 border border-border">
-                                <h5 className="text-sm font-bold text-primary mb-3">Required Roles & Items</h5>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                  {metadata.slots.map((slot) => (
-                                    <div
-                                      key={slot.id}
-                                      className="flex items-center justify-between p-2 bg-background rounded border border-border/50"
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-xs font-mono text-muted-foreground">{slot.id}</span>
-                                        <span className="text-sm font-medium">{slot.name}</span>
-                                      </div>
-                                      {slot.required_item && (
-                                        <div className="flex items-center gap-1 text-xs">
-                                          <span className="text-muted-foreground">{slot.required_item.name}</span>
-                                          {slot.required_item.is_used && (
-                                            <span className="text-red-400 font-bold">(Used)</span>
-                                          )}
-                                        </div>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="mb-6 grid grid-cols-2 gap-4">
-                            <div className="bg-background rounded-lg p-4 border border-border">
-                              <div className="text-xs text-muted-foreground mb-1">Total Money</div>
-                              <div className="text-xl font-bold text-green-400">{formatCurrency(totalMoney)}</div>
-                            </div>
-                            <div className="bg-background rounded-lg p-4 border border-border">
-                              <div className="text-xs text-muted-foreground mb-1">Average Money</div>
-                              <div className="text-xl font-bold text-green-400">
-                                {formatCurrency(Math.round(avgMoney))}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex justify-center">
-                            <svg width={300} height={300} style={{ overflow: "visible" }}>
-                              <VictoryPie
-                                standalone={false}
-                                width={300}
-                                height={300}
-                                data={pieData}
-                                innerRadius={0}
-                                colorScale={colors}
-                                style={{
-                                  labels: { fill: "transparent" },
-                                  data: {
-                                    stroke: "#ffffff",
-                                    strokeWidth: 2,
-                                  },
-                                }}
-                                animate={{
-                                  duration: 500,
-                                }}
-                              />
-                            </svg>
-                          </div>
-                          <div className="flex justify-center gap-4 mt-4 flex-wrap">
-                            {pieData.map((entry, index) => (
-                              <div key={`legend-${index}`} className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[index] }} />
-                                <span className="text-sm font-medium" style={{ color: colors[index] }}>
-                                  {entry.label}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
               </div>
+
+              {crimeStats.map((crime) => {
+                const isExpanded = expandedCrimes.has(crime.name)
+                const metadata = CRIME_METADATA[crime.name]
+                const pieData = []
+                const colors = []
+
+                if (crime.successful > 0) {
+                  pieData.push({
+                    x: "Success",
+                    y: crime.successful,
+                    label: `Success: ${crime.successful}`,
+                  })
+                  colors.push("#22c55e")
+                }
+
+                if (crime.failed > 0) {
+                  pieData.push({
+                    x: "Failed",
+                    y: crime.failed,
+                    label: `Failed: ${crime.failed}`,
+                  })
+                  colors.push("#ef4444")
+                }
+
+                if (crime.planning > 0) {
+                  pieData.push({
+                    x: "Planning",
+                    y: crime.planning,
+                    label: `Planning: ${crime.planning}`,
+                  })
+                  colors.push("#3b82f6")
+                }
+
+                if (crime.recruiting > 0) {
+                  pieData.push({
+                    x: "Recruiting",
+                    y: crime.recruiting,
+                    label: `Recruiting: ${crime.recruiting}`,
+                  })
+                  colors.push("#a855f7")
+                }
+
+                if (crime.expired > 0) {
+                  pieData.push({
+                    x: "Expired",
+                    y: crime.expired,
+                    label: `Expired: ${crime.expired}`,
+                  })
+                  colors.push("#6b7280")
+                }
+
+                const crimeInstances = crimes.filter((c) => c.name === crime.name && c.status === "Successful")
+                const totalMoney = crimeInstances.reduce((sum, c) => sum + (c.rewards?.money || 0), 0)
+                const avgMoney = crimeInstances.length > 0 ? totalMoney / crimeInstances.length : 0
+
+                return (
+                  <div key={crime.name} className="bg-card border border-border/50 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => toggleCrime(crime.name)}
+                      className="w-full flex items-center justify-between p-4 hover:bg-accent/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-semibold text-foreground">{crime.name}</h4>
+                          <span className={`text-sm font-bold ${getDifficultyColor(crime.difficulty)}`}>
+                            (Diff: {crime.difficulty})
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 text-sm">
+                          {crime.successful > 0 && (
+                            <span className="text-green-400 font-bold">{crime.successful} Success</span>
+                          )}
+                          {crime.failed > 0 && <span className="text-red-400 font-bold">{crime.failed} Failed</span>}
+                          {crime.planning > 0 && (
+                            <span className="text-blue-400 font-bold">{crime.planning} Planning</span>
+                          )}
+                          {crime.recruiting > 0 && (
+                            <span className="text-purple-400 font-bold">{crime.recruiting} Recruiting</span>
+                          )}
+                          {crime.expired > 0 && (
+                            <span className="text-gray-400 font-bold">{crime.expired} Expired</span>
+                          )}
+                          {crime.successRate !== "N/A" && (
+                            <span className="text-muted-foreground">({crime.successRate}%)</span>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronDown
+                        size={20}
+                        className={`transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
+                      />
+                    </button>
+
+                    {isExpanded && pieData.length > 0 && (
+                      <div className="p-6 border-t border-border/50 animate-in fade-in duration-200">
+                        {metadata && (
+                          <div className="mb-6 space-y-4">
+                            <div className="bg-background/50 rounded-lg p-4 border border-border">
+                              <h5 className="text-sm font-bold text-primary mb-2">Description</h5>
+                              <p className="text-sm text-muted-foreground leading-relaxed">{metadata.description}</p>
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                              <div className="bg-background/50 rounded-lg p-3 border border-border">
+                                <div className="text-xs text-muted-foreground mb-1">Spawn Level</div>
+                                <div className="text-lg font-bold text-cyan-400">
+                                  {metadata.spawn.name} (Lvl {metadata.spawn.level})
+                                </div>
+                              </div>
+                              <div className="bg-background/50 rounded-lg p-3 border border-border">
+                                <div className="text-xs text-muted-foreground mb-1">Scope Cost</div>
+                                <div className="text-lg font-bold text-orange-400">{metadata.scope.cost}</div>
+                              </div>
+                              <div className="bg-background/50 rounded-lg p-3 border border-border">
+                                <div className="text-xs text-muted-foreground mb-1">Scope Return</div>
+                                <div className="text-lg font-bold text-green-400">{metadata.scope.return}</div>
+                              </div>
+                              <div className="bg-background/50 rounded-lg p-3 border border-border">
+                                <div className="text-xs text-muted-foreground mb-1">Prerequisite</div>
+                                <div className="text-sm font-bold text-yellow-400">
+                                  {metadata.prerequisite || "None"}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="bg-background/50 rounded-lg p-4 border border-border">
+                              <h5 className="text-sm font-bold text-primary mb-3">Required Roles & Items</h5>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {metadata.slots.map((slot) => (
+                                  <div
+                                    key={slot.id}
+                                    className="flex items-center justify-between p-2 bg-background rounded border border-border/50"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-mono text-muted-foreground">{slot.id}</span>
+                                      <span className="text-sm font-medium">{slot.name}</span>
+                                    </div>
+                                    {slot.required_item && (
+                                      <div className="flex items-center gap-1 text-xs">
+                                        <span className="text-muted-foreground">{slot.required_item.name}</span>
+                                        {slot.required_item.is_used && (
+                                          <span className="text-red-400 font-bold">(Used)</span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="mb-6 grid grid-cols-2 gap-4">
+                          <div className="bg-background rounded-lg p-4 border border-border">
+                            <div className="text-xs text-muted-foreground mb-1">Total Money</div>
+                            <div className="text-xl font-bold text-green-500">{formatCurrency(totalMoney)}</div>
+                          </div>
+                          <div className="bg-background rounded-lg p-4 border border-border">
+                            <div className="text-xs text-muted-foreground mb-1">Average Money</div>
+                            <div className="text-xl font-bold text-green-500">
+                              {formatCurrency(Math.round(avgMoney))}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex justify-center">
+                          <svg width={300} height={300} style={{ overflow: "visible" }}>
+                            <VictoryPie
+                              standalone={false}
+                              width={300}
+                              height={300}
+                              data={pieData}
+                              innerRadius={0}
+                              colorScale={colors}
+                              style={{
+                                labels: { fill: "transparent" },
+                                data: {
+                                  stroke: "#ffffff",
+                                  strokeWidth: 2,
+                                },
+                              }}
+                              animate={{
+                                duration: 500,
+                              }}
+                            />
+                          </svg>
+                        </div>
+                        <div className="flex justify-center gap-4 mt-4 flex-wrap">
+                          {pieData.map((entry, index) => (
+                            <div key={`legend-${index}`} className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[index] }} />
+                              <span className="text-sm font-medium" style={{ color: colors[index] }}>
+                                {entry.label}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </>
           )}
         </div>

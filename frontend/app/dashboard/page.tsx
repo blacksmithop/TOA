@@ -7,7 +7,6 @@ import { fetchAndCacheItems } from "@/lib/cache/items-cache"
 import type { TornItem } from "@/lib/cache/items-cache"
 import { fetchAndCacheMembers } from "@/lib/cache/members-cache"
 import CrimeSummary from "@/components/crimes/crime-summary"
-import CrimeSuccessCharts from "@/components/crimes/crime-success-charts"
 import { handleApiError, validateApiResponse } from "@/lib/api-error-handler"
 import { ResetConfirmationDialog } from "@/components/reset-confirmation-dialog"
 import { clearAllCache } from "@/lib/cache/cache-reset"
@@ -271,8 +270,6 @@ export default function Dashboard() {
             hasFundsScope={hasFundsScope}
             hasMedicalScope={hasMedicalScope}
           />
-
-          {allCrimes.length > 0 && <CrimeSuccessCharts crimes={allCrimes} />}
         </div>
       </main>
 
