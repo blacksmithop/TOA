@@ -2,7 +2,7 @@
 
 import type { Slot, Member } from "@/types/crime"
 import { useState } from "react"
-import { AlertTriangle, Plane, Globe } from "lucide-react"
+import { AlertTriangle, Plane, Globe, Hospital, Scale } from "lucide-react"
 import { ProgressRing } from "./progress-ring"
 import { getPositionPassRateColor } from "@/lib/crimes/colors"
 import { getWeightColor, getWeightBgColor } from "@/lib/crimes/role-weights"
@@ -80,6 +80,11 @@ export default function CrimeSlot({
   const travelDescription = isTraveling || isAbroad ? memberData?.status?.description : null
   const isReturning = travelDescription?.toLowerCase().includes("returning to") || false
 
+  const isHospitalized = memberData?.status?.state === "Hospital" && ["Planning", "Recruiting"].includes(crimeStatus)
+  const isJailed = memberData?.status?.state === "Jail" && ["Planning", "Recruiting"].includes(crimeStatus)
+  const statusDescription = isHospitalized || isJailed ? memberData?.status?.description : null
+  const statusDetails = isHospitalized || isJailed ? memberData?.status?.details : null
+
   return (
     <div className="space-y-1">
       <div
@@ -156,6 +161,40 @@ export default function CrimeSlot({
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>{travelDescription || "Member is traveling"}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                {isHospitalized && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="shrink-0">
+                          <Hospital size={14} className="text-red-400 cursor-help" />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="space-y-1">
+                          <p>{statusDescription || "Member is hospitalized"}</p>
+                          {statusDetails && <p className="text-xs text-muted-foreground">{statusDetails}</p>}
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                {isJailed && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="shrink-0">
+                          <Scale size={14} className="text-orange-400 cursor-help" />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="space-y-1">
+                          <p>{statusDescription || "Member is jailed"}</p>
+                          {statusDetails && <p className="text-xs text-muted-foreground">{statusDetails}</p>}
+                        </div>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
