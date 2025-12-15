@@ -1,8 +1,8 @@
 "use client"
 
-import { RefreshCw, Settings, Telescope } from "lucide-react"
+import { RefreshCw, Package, Settings } from "lucide-react"
 
-interface ScopeUsageStatsProps {
+interface FundsStatsProps {
   totalLogs: number
   maxFetchCount: number
   isFetching: boolean
@@ -11,20 +11,20 @@ interface ScopeUsageStatsProps {
   onConfigClick: () => void
 }
 
-export default function ScopeUsageStats({
+export default function FundsStats({
   totalLogs,
   maxFetchCount,
   isFetching,
   fetchProgress,
   onFetch,
   onConfigClick,
-}: ScopeUsageStatsProps) {
+}: FundsStatsProps) {
   return (
     <div className="bg-card border border-border rounded-lg p-6">
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <h2 className="text-xl font-bold text-foreground">Scope Usage Logs</h2>
+            <h2 className="text-xl font-bold text-foreground">Funds Logs</h2>
             <button
               onClick={onConfigClick}
               className="p-1.5 hover:bg-accent rounded-lg transition-colors"
@@ -57,7 +57,7 @@ export default function ScopeUsageStats({
             </>
           ) : (
             <>
-              <Telescope size={20} />
+              <Package size={20} />
               Fetch Historical Data
             </>
           )}
