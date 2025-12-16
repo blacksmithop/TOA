@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { RefreshCw, LogOut, MoreVertical, Info, Play, Loader2, ChevronDown, ArrowLeft, ArrowUpDown } from "lucide-react"
+import { RefreshCw, LogOut, MoreVertical, Info, Play, Loader2, ChevronDown, ArrowLeft } from "lucide-react"
 import { fetchAndCacheItems } from "@/lib/cache/items-cache"
 import type { TornItem } from "@/lib/cache/items-cache"
 import { VictoryPie } from "victory"
@@ -18,8 +18,10 @@ import { CRIME_METADATA } from "@/lib/crimes/metadata"
 import CrimeSuccessCharts from "@/components/crimes/crime-success-charts"
 import { apiKeyManager } from "@/lib/auth/api-key-manager"
 import { db, STORES } from "@/lib/db/indexeddb"
+import { isValid } from "date-fns"
+import { ReportDateFilter } from "@/components/reports/report-date-filter"
 
-export default function ReportsPage() {
+export default function CrimeReportsPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [totalCrimes, setTotalCrimes] = useState(0)
@@ -39,6 +41,8 @@ export default function ReportsPage() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
   const [dateFilter, setDateFilter] = useState<number>(0)
   const [searchFilter, setSearchFilter] = useState<string>("")
+  const [customDateRange, setCustomDateRange] = useState<{ start: Date; end: Date } | null>(null)
+  const [datePreset, setDatePreset] = useState<string>("all")
 
   const WEEK_IN_SECONDS = 7 * 24 * 60 * 60
   const REQUEST_DELAY = 2000
@@ -122,6 +126,63 @@ export default function ReportsPage() {
     setTotalCrimes(allCrimes.length)
   }, [allCrimes])
 
+  const { minDate, maxDate } = useMemo(() => {
+    if (!crimes || crimes.length === 0) {
+      return {
+        minDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+        maxDate: new Date(),
+      }
+    }
+
+    const timestamps = crimes.map((c) => c.created_at * 1000)
+    const calculatedMinDate = new Date(Math.min(...timestamps))
+    const calculatedMaxDate = new Date(Math.max(...timestamps))
+
+    return {
+      minDate: calculatedMinDate,
+      maxDate: calculatedMaxDate,
+    }
+  }, [crimes])
+
+  const initialStartDate = useMemo(() => {
+    if (customDateRange?.start && isValid(customDateRange.start)) {
+      return customDateRange.start
+    }
+    return minDate
+  }, [customDateRange, minDate])
+
+  const initialEndDate = useMemo(() => {
+    if (customDateRange?.end && isValid(customDateRange.end)) {
+      return customDateRange.end
+    }
+    return maxDate
+  }, [customDateRange, maxDate])
+
+  const dateFilteredCrimes = useMemo(() => {
+    if (!customDateRange?.start || !customDateRange?.end || datePreset === "all") {
+      return allCrimes
+    }
+
+    return allCrimes.filter((crime) => {
+      const crimeDate = new Date(crime.created_at * 1000)
+      return crimeDate >= customDateRange.start && crimeDate <= customDateRange.end
+    })
+  }, [allCrimes, customDateRange, datePreset])
+
+  const crimesFilteredByStatus = useMemo(() => {
+    if (statusFilter === "All") {
+      return dateFilteredCrimes
+    }
+    return dateFilteredCrimes.filter((crime) => {
+      if (statusFilter === "Successful") return crime.result === 1
+      if (statusFilter === "Failed") return crime.result === 0
+      if (statusFilter === "Planning") return crime.result === 2
+      if (statusFilter === "Recruiting") return crime.result === 3
+      if (statusFilter === "Expired") return crime.result === 4
+      return true
+    })
+  }, [dateFilteredCrimes, statusFilter])
+
   const summary = useMemo(() => {
     let totalMoney = 0
     let totalRespect = 0
@@ -136,7 +197,7 @@ export default function ReportsPage() {
     }
     const itemsGained = new Map<number, { item: any; quantity: number; totalValue: number }>()
 
-    crimes.forEach((crime) => {
+    crimesFilteredByStatus.forEach((crime) => {
       const status = crime.status === "Failure" ? "Failed" : crime.status
       if (status in statusCounts) {
         statusCounts[status as keyof typeof statusCounts]++
@@ -185,7 +246,7 @@ export default function ReportsPage() {
       statusCounts,
       itemsGained: Array.from(itemsGained.values()),
     }
-  }, [crimes, items])
+  }, [crimesFilteredByStatus, items])
 
   const crimeStats = useMemo(() => {
     const stats = new Map<
@@ -200,7 +261,7 @@ export default function ReportsPage() {
       }
     >()
 
-    crimes.forEach((crime) => {
+    crimesFilteredByStatus.forEach((crime) => {
       const existing = stats.get(crime.name) || {
         successful: 0,
         failed: 0,
@@ -276,7 +337,7 @@ export default function ReportsPage() {
     }
 
     return filteredStats
-  }, [crimes, difficultyFilter, sortBy, sortDirection, searchFilter])
+  }, [crimesFilteredByStatus, difficultyFilter, sortBy, sortDirection, searchFilter])
 
   const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -418,6 +479,14 @@ export default function ReportsPage() {
     setExpandedCrimes(newExpanded)
   }
 
+  const handleDateRangeChange = (start: Date, end: Date) => {
+    setCustomDateRange({ start, end })
+  }
+
+  const handlePresetChange = (preset: string) => {
+    setDatePreset(preset)
+  }
+
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
       <ItemModal item={selectedItem} onClose={() => setSelectedItem(null)} />
@@ -525,7 +594,7 @@ export default function ReportsPage() {
             )}
           </div>
 
-          {crimes.length > 0 && (
+          {crimesFilteredByStatus.length > 0 && (
             <>
               <div className="bg-card p-3 rounded-lg border border-border/50">
                 <div className="text-xs text-muted-foreground mb-2 font-bold">Status Breakdown</div>
@@ -553,59 +622,50 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              <CrimeSuccessCharts crimes={crimes} />
+              <CrimeSuccessCharts crimes={crimesFilteredByStatus} />
 
               <div className="bg-card border border-border rounded-lg p-4 space-y-4">
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">Search Crime</label>
-                    <input
-                      type="text"
-                      value={searchFilter}
-                      onChange={(e) => setSearchFilter(e.target.value)}
-                      placeholder="Search by crime name..."
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
+                <div className="border-b border-border pb-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-muted-foreground mb-1.5">Search Crime</label>
+                      <input
+                        type="text"
+                        value={searchFilter}
+                        onChange={(e) => setSearchFilter(e.target.value)}
+                        placeholder="Search by crime name..."
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
 
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">Sort By</label>
-                    <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                        Filter by Difficulty
+                      </label>
                       <select
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value)}
-                        className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                        value={difficultyFilter}
+                        onChange={(e) => setDifficultyFilter(e.target.value)}
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                       >
-                        <option value="Total">Total Count</option>
-                        <option value="Difficulty">Difficulty</option>
-                        <option value="Success Rate">Success Rate</option>
-                        <option value="Name">Name</option>
+                        <option value="All">All Difficulties</option>
+                        <option value="Easy (1-2)">Easy (1-2)</option>
+                        <option value="Medium (3-5)">Medium (3-5)</option>
+                        <option value="Hard (6-8)">Hard (6-8)</option>
+                        <option value="Expert (9-10)">Expert (9-10)</option>
                       </select>
-                      <button
-                        onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
-                        className="bg-background border border-border rounded-lg px-3 py-2 hover:bg-accent transition-colors"
-                        title={sortDirection === "asc" ? "Ascending" : "Descending"}
-                      >
-                        <ArrowUpDown size={16} className="text-foreground" />
-                      </button>
                     </div>
                   </div>
 
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                      Filter by Difficulty
-                    </label>
-                    <select
-                      value={difficultyFilter}
-                      onChange={(e) => setDifficultyFilter(e.target.value)}
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      <option value="All">All Difficulties</option>
-                      <option value="Easy (1-2)">Easy (1-2)</option>
-                      <option value="Medium (3-5)">Medium (3-5)</option>
-                      <option value="Hard (6-8)">Hard (6-8)</option>
-                      <option value="Expert (9-10)">Expert (9-10)</option>
-                    </select>
+                  <div>
+                    <ReportDateFilter
+                      minDate={minDate}
+                      maxDate={maxDate}
+                      startDate={initialStartDate}
+                      endDate={initialEndDate}
+                      onDateRangeChange={handleDateRangeChange}
+                      onPresetChange={handlePresetChange}
+                      selectedPreset={datePreset}
+                    />
                   </div>
                 </div>
               </div>
@@ -661,7 +721,9 @@ export default function ReportsPage() {
                   colors.push("#6b7280")
                 }
 
-                const crimeInstances = crimes.filter((c) => c.name === crime.name && c.status === "Successful")
+                const crimeInstances = crimesFilteredByStatus.filter(
+                  (c) => c.name === crime.name && c.status === "Successful",
+                )
                 const totalMoney = crimeInstances.reduce((sum, c) => sum + (c.rewards?.money || 0), 0)
                 const avgMoney = crimeInstances.length > 0 ? totalMoney / crimeInstances.length : 0
 
